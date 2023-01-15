@@ -1,0 +1,23 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.vscode/
+
+# Temporary files
+draft.ipynb
+GPU/dataset/._*.txt
+GPU/dataset/facebook/._*.txt
+GPU/dataset/._*
