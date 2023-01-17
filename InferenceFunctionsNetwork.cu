@@ -21,8 +21,6 @@ int log_likelihood_Rho(int N,
                        double s2Rho,
                        double *lik
 ) {
-    //*******
-    //printf("likelihood without adj info = %.3f\n",lik[0] );
     gsl_matrix *mu = gsl_matrix_calloc(N - 1, 1);// (Z_{-n} Kronecker_Product Zn ) Qnon . Snon. vec(Rho_n)
     gsl_matrix_view Q_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
     gsl_matrix *SQnon = gsl_matrix_calloc(N - 1, K * K);//(Znon Kron Zn)(Snon^T Snon+beta I)^{-1}
@@ -157,11 +155,10 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
     //sample every user
     for (int n = 0; n < N; n++) {
-        auto * p = new double [TK];
+        auto *p = new double[TK];
         for (int i = 0; i < TK; i++) {
             p[i] = 0.0;
         }
-
 
 
         chrono::steady_clock::time_point begin = chrono::steady_clock::now();
@@ -206,8 +203,9 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        if(verbose > INFO){
-            cout << "Prepare Qnon cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]" << endl;
+        if (verbose > INFO) {
+            cout << "Prepare Qnon cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count()
+                 << "[ms]" << endl;
         }
         middle = end;
 
@@ -243,15 +241,12 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         gsl_matrix_free(vecRho_n_n);
 
 
-
-
         end = chrono::steady_clock::now();
-        if(verbose > INFO){
-            cout << "Prepare Enon and rho cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]" << endl;
+        if (verbose > INFO) {
+            cout << "Prepare Enon and rho cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count()
+                 << "[ms]" << endl;
         }
         middle = end;
-
-
 
 
         // Sampling znk for k=1...K
@@ -261,7 +256,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             if (nest[k] > 0) {
                 aux = gsl_matrix_alloc(1, K);
                 // z_nk=0
-                //printf("set z_nk=0 ...\n" );
                 gsl_matrix_set(&Zn.matrix, k, 0, 0);
                 matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
 
@@ -287,7 +281,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                     }
                     gsl_matrix_free(muy);
                 }
-                if(verbose > INFO){
+                if (verbose > INFO) {
                     printf("-- lik0=%f\n", lik0);
                 }
 
@@ -301,17 +295,15 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, &lik0);
 
 
-
-
                 kEnd = chrono::steady_clock::now();
-                if(verbose > INFO){
-                    cout << "likelihood rho cost = " << chrono::duration_cast<chrono::milliseconds>(kEnd - kBegin).count() << "[ms]" << endl;
+                if (verbose > INFO) {
+                    cout << "likelihood rho cost = "
+                         << chrono::duration_cast<chrono::milliseconds>(kEnd - kBegin).count() << "[ms]" << endl;
                 }
 
 
 
                 // z_nk=1
-                //printf("set z_nk=1 ...\n" );
                 gsl_matrix_set(&Zn.matrix, k, 0, 1);
                 matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
                 double lik1 = 0;
@@ -336,14 +328,13 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                     }
                     gsl_matrix_free(muy);
                 }
-                if(verbose > INFO){
+                if (verbose > INFO) {
                     printf("-- lik1=%f\n", lik1);
                 }
                 //Pseudo-likelihhod for H when z_nk=1 (marginalised)
                 log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, &lik1);
 
-                //***********
-                if(verbose > INFO){
+                if (verbose > INFO) {
                     printf("lik0=%f , lik1=%f \n", lik0, lik1);
                 }
 
@@ -351,7 +342,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 double p1 = gsl_sf_log(nest[k]) + lik1;
                 double p1_n, p0_n;
 
-                if(verbose > INFO){
+                if (verbose > INFO) {
                     printf("p1=%f, p0=%f \n", p1, p0);
                 }
 
@@ -363,7 +354,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                     p1_n = 1;
                 }
                 p1_n = p1_n / (p1_n + p0_n);
-                //printf("p1_n=%f \n", p1_n);
                 if (isinf(p1_n) || isnan(p1_n)) {
                     printf("nest[%d]=%d \n", k, nest[k]);
                     printf("lik0=%f , lik1=%f \n", lik0, lik1);
@@ -386,13 +376,12 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         }
 
 
-
         end = chrono::steady_clock::now();
-        if(verbose > INFO){
-            cout << "Sample all K cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]" << endl;
+        if (verbose > INFO) {
+            cout << "Sample all K cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count()
+                 << "[ms]" << endl;
         }
         middle = end;
-
 
 
         gsl_matrix_free(Snon);
@@ -402,7 +391,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         int Kdel = 0;
         for (int k = 0; k < K; k++) {
             if (nest[k] == 0 && K - Kdel > 1) {
-                if(verbose > INFO){
+                if (verbose > INFO) {
                     printf("remove empty features: K= %d .......\n", K);
                 }
                 Kdel++;
@@ -423,7 +412,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         if (flagDel) {
-            if(verbose > NO_OUTPUT){
+            if (verbose > NO_OUTPUT) {
                 printf("Update P and Q after removing a zero feature column ......\n");
             }
 
@@ -442,8 +431,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             }
             //****************** Update Q & Qnon *********************
             //remove the empty column in matrix Z and its corresponding features in Q
-            //tested and approved
-            //inverse_matrix_Q(beta, Z, Q, N, K, ldet_Q);
+
             Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
 
             gsl_matrix_set_identity(Q);
@@ -460,35 +448,33 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             //Update both Qnon, log(det(Qnon)) and etanon
             Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
             //rank_one_update_Kronecker(&Z_view.matrix, &Zn.matrix, &Qnon_view.matrix, n, K, N, 0); // removing Zn ****????
-            //test covariance Q by removing the effect of n-th row
+
             Znon = gsl_matrix_calloc(K, N - 1);
             remove_col(K, N, n, Znon, &Z_view.matrix);
             compute_inverse_Q_directly(N - 1, K, Znon, beta, &Qnon_view.matrix);
 
-            if(verbose > INFO){
+            if (verbose > INFO) {
                 printf("Removing a feature column ldet_Q=%f, ldet_Qnon = %f\n", ldet_Q[0],
                        lndet_get(&Qnon_view.matrix, K * K, K * K, 0));
             }
 
             //Update_Q_after_removing(N, K, n, beta, &Z_view.matrix, &Qnon_view.matrix, 0 );
-            //update eta 31.12.2018
             matrix_multiply(ZoZ, vecRho, eta, 1, 0, CblasNoTrans, CblasNoTrans);
             gsl_matrix_memcpy(etanon, eta);
             Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
             rank_one_update_eta(&Z_view.matrix, &Zn.matrix, Rho, &Enon_view.matrix, n, K, N, 0);//removing Zn
             gsl_matrix_free(Znon);
 
-            if(verbose > NO_OUTPUT){
+            if (verbose > NO_OUTPUT) {
                 printf("End of updating Eta after removing a feature column.......\n");
             }
         }
 
 
-
-
         end = chrono::steady_clock::now();
-        if(verbose > INFO){
-            cout << "Remove feature cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]" << endl;
+        if (verbose > INFO) {
+            cout << "Remove feature cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count()
+                 << "[ms]" << endl;
         }
         middle = end;
 
@@ -543,7 +529,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 }
 
                 //****************Is the value of Z_{n(K+j-1)} already changed
-                //adding one column to Z changes Q as following (tested and it works)
+                //adding one column to Z changes Q as following
 
                 Iden = gsl_matrix_calloc(K, K);
                 gsl_matrix_set_identity(Iden);
@@ -579,10 +565,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 gsl_matrix_free(Qexp);
                 gsl_matrix_free(Qmatrix);
 
-
-                //Setting up the calculation of the log likelihood of adding a new feature
-                //Qnon_view   = gsl_matrix_submatrix (Qnon, 0, 0, (K+j)*(K+j), (K+j)*(K+j));
-
                 Z_view = gsl_matrix_submatrix(Z, 0, 0, K + j, N);
                 Znon = gsl_matrix_calloc(K + j, N - 1);
                 remove_col(K + j, N, n, Znon, &Z_view.matrix);
@@ -593,8 +575,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
                 log_likelihood_Rho(N, K + j, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho,
                                    &lik);
-
-                //****************
 
                 p[j] = lik + j * gsl_sf_log(alpha / N) - gsl_sf_log(factorial(j));
                 gsl_matrix_free(aux);
@@ -620,7 +600,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             }
             int Knew = mnrnd(p, kk);
             if (Knew > 0) {
-                if(verbose > NO_OUTPUT){
+                if (verbose > NO_OUTPUT) {
                     printf("add new feature ....\n");
                 }
                 for (int k = K; k < K + Knew; k++) { nest[k] = 1; }
@@ -641,20 +621,18 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         }
 
 
-
-
         end = chrono::steady_clock::now();
-        if(verbose > INFO){
-            cout << "Add new feature cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]" << endl;
+        if (verbose > INFO) {
+            cout << "Add new feature cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count()
+                 << "[ms]" << endl;
         }
         middle = end;
 
 
 
 
-        //****************Update Q and log(det(Q))
+        // ----------------------- Update Q and log(det(Q)) ----------------------------
         //update Qnon by adding Zn
-        //printf("adding Zn row ..\n");
         Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
         Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
 
@@ -672,18 +650,15 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        if(verbose > INFO){
-            cout << "Update Z cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]" << endl;
+        if (verbose > INFO) {
+            cout << "Update Z cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]"
+                 << endl;
         }
         middle = end;
 
         cout << "Total cost = " << chrono::duration_cast<chrono::milliseconds>(end - begin).count() << "[ms]" << endl;
     }
 
-
-    //gsl_matrix_memcpy(A, &Qnon_view.matrix);
-    //gsl_linalg_cholesky_decomp (A);
-    //end testing
     gsl_matrix_free(s2y_p);
     gsl_matrix_free(ZoZ);
 
@@ -1075,13 +1050,13 @@ int IBPsampler_func(double missing,
                     int Nsim,
                     int verbose) {
 
-    if(verbose > NO_OUTPUT){
+    if (verbose > NO_OUTPUT) {
         printf("N=%d, D=%d, K=%d\n", N, D, K);
         printf("Running inference algorithm (currently inside C++ routine...)\n");
     }
 
 
-    //.....INIZIALIZATION........//
+    //.....INITIALIZATION........//
     double s2theta = 2;
     // random numbers
     srand48(time(NULL));
@@ -1114,7 +1089,7 @@ int IBPsampler_func(double missing,
 
 
     // initialize counts
-    int * nest = new int[maxK];
+    int *nest = new int[maxK];
     for (int i = 0; i < maxK; i++) {
         nest[i] = 0;
     }
@@ -1177,9 +1152,7 @@ int IBPsampler_func(double missing,
                         gsl_matrix_set(Y[d], 0, n, f_1(xnd, f[d], mu[d],
                                                        w[d]));// +gsl_ran_beta (seed, 5,1)????? shouldn't this be floor (f_1(xnd,f[d], mu[d], w[d]))
                     }
-//                     printf("ynd = %f ", f_1(xnd,f[d], mu[d], w[d]));
                 }
-//                 printf("\n");
                 break;
 
             case 'c':
@@ -1239,7 +1212,7 @@ int IBPsampler_func(double missing,
 
 
     ///  ********************
-    if(verbose > NO_OUTPUT){
+    if (verbose > NO_OUTPUT) {
         printf("Initialize Rho using pseudo-observation of the adjacency matrix ..... !\n");
     }
     gsl_matrix *Rho = gsl_matrix_calloc(N, N);
@@ -1267,7 +1240,6 @@ int IBPsampler_func(double missing,
             }
         }
     } else if (Net[0] == 'b') {//If the adjacency matrix is binary
-        //printf("initial delta=%.2f\n",delta );
         int a_mn;
         for (int m = 0; m < N; m++) {
             for (int n = 0; n < m; n++) {
@@ -1285,13 +1257,7 @@ int IBPsampler_func(double missing,
             }
         }
     }
-    /*
-    gsl_vector2matrix(vecRho, Rho );
-    for (int row=0; row<Rho->size1; ++row)
-        for (int col=0; col<Rho->size2; ++col)
-            printf(col==Rho->size2-1?"%6.3f\n":"%6.3f ",gsl_matrix_get(Rho,row,col));
-    exit(0);
-    */
+
     //Initialize Eta= (Z kron. Prod. Z)^Tvec(Rho)
     gsl_matrix *Eta = gsl_matrix_calloc(maxK * maxK, 1);
     gsl_matrix *ZoZ = gsl_matrix_calloc(maxK * maxK, N * N);
@@ -1333,16 +1299,9 @@ int IBPsampler_func(double missing,
                 for (int r = 0; r < R[d] - 1; r++) {
                     gsl_matrix_view L_view = gsl_matrix_submatrix(lambda[d], 0, r, Kest, 1);
                     matrix_multiply(S, &L_view.matrix, MuB, 1, 0, CblasNoTrans, CblasNoTrans);
-                    // gsl_vector_view gsl_matrix_subcolumn (gsl_matrix * m,
-                    // size_t j, size_t offset, size_t n)
                     Bd_view = gsl_matrix_subcolumn(B[d], r, 0, Kest);
                     gsl_vector_view MuB_view = gsl_matrix_column(MuB, 0);
                     mvnrnd(&Bd_view.vector, S, &MuB_view.vector, Kest, seed);
-//                    if (isinf(compute_vector_mean(K, missing, &Bd_view.vector)) || isnan(compute_vector_mean(K, missing, &Bd_view.vector)) ){
-//                        printf("error: numerical error at sampling B in dimension %d \n",d);
-//                        break;
-//                    }
-
                 }
                 Bd_view = gsl_matrix_subcolumn(B[d], R[d] - 1, 0, Kest);
                 gsl_vector_set_zero(&Bd_view.vector);
@@ -1353,10 +1312,6 @@ int IBPsampler_func(double missing,
                 gsl_vector_view Bd_view = gsl_matrix_subcolumn(B[d], 0, 0, Kest);
                 gsl_vector_view MuB_view = gsl_matrix_subcolumn(MuB, 0, 0, Kest);
                 mvnrnd(&Bd_view.vector, S, &MuB_view.vector, Kest, seed);
-//                if (isinf(compute_vector_mean(K, missing, &Bd_view.vector)) || isnan(compute_vector_mean(K, missing, &Bd_view.vector)) ){
-//                    printf("error: numerical error at sampling B in dimension %d \n",d);
-//                    break;
-//                }
             }
 
             //Sample Y
@@ -1384,7 +1339,7 @@ int IBPsampler_func(double missing,
         /// *****Sample Hs Troublesome part of the code
         gsl_matrix_view H_view = gsl_matrix_submatrix(H, 0, 0, Kest, Kest);
 
-        if(verbose > INFO){
+        if (verbose > INFO) {
             printf("old H\n");
             for (int i = 0; i < Kest; i++) {
                 for (int j = 0; j < Kest; j++) {
@@ -1400,7 +1355,7 @@ int IBPsampler_func(double missing,
         gsl_matrix2vector(vecH, &H_view.matrix);
         gsl_vector_view vecH_view = gsl_matrix_subcolumn(vecH, 0, 0, Kest * Kest);
 
-        if(verbose > INFO){
+        if (verbose > INFO) {
             printf("vecH_view size = %zd\n", (&vecH_view.vector)->size);
         }
 
@@ -1418,7 +1373,7 @@ int IBPsampler_func(double missing,
 
         gsl_vector2matrix(vecH, &H_view.matrix);
 
-        if(verbose > INFO){
+        if (verbose > INFO) {
             printf("new H\n");
             for (int i = 0; i < Kest; i++) {
                 for (int j = 0; j < Kest; j++) {
@@ -1481,13 +1436,12 @@ int IBPsampler_func(double missing,
         cout << endl;
 
 
-
         gsl_matrix_free(vecH);
         gsl_matrix_free(MuH);
         gsl_matrix_free(S);
     }
 
-    if(verbose > NO_OUTPUT){
+    if (verbose > NO_OUTPUT) {
         printf("After IT loop...\n");
     }
 
@@ -1530,10 +1484,10 @@ int initialize_func(int N,
                     double *s2Y) {
 
     int maxR = 1;
-    auto * maxX = new double[D];
-    auto * minX = new double[D];
-    auto * meanX = new double[D];
-    auto * varX = new double[D];
+    auto *maxX = new double[D];
+    auto *minX = new double[D];
+    auto *meanX = new double[D];
+    auto *varX = new double[D];
     gsl_vector_view Xd_view;
     for (int d = 0; d < D; d++) {
         Xd_view = gsl_matrix_row(X, d);
