@@ -38,7 +38,7 @@ int main() {
     int N;
     int D;
     // k need to be larger than 1
-    int K = 3;
+    int K = 2;
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise
@@ -46,7 +46,7 @@ int main() {
     double s2H = 0.001;
     double alpha = 0.5;     // mass parameter for the Indian Buffet Process
     int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
-    int maxK = 15;          // maximum number of latent features for memory allocation
+    int maxK = 25;          // maximum number of latent features for memory allocation
     double missing = -1;
     int verbose = 1;        // 0 for NO_OUTPUT, 1 for INFO, 2 for DEBUG
 
@@ -58,7 +58,7 @@ int main() {
     const char *delim = "\t";
 
     // todo please enter the correct file location
-    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix_200_4.txt)", ios::in);
+    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix.txt)", ios::in);
     while (getline(adjIn, s)) {
         temp.emplace_back(s);
     }
@@ -89,7 +89,7 @@ int main() {
     temp.clear();
     s = "";
     // todo please enter the correct file location
-    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix_200_4.txt)", ios::in);
+    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix.txt)", ios::in);
     while (getline(attributeIn, s)) {
         temp.emplace_back(s);
     }

@@ -81,6 +81,167 @@ int log_likelihood_Rho(int N,
     return 0;
 }
 
+
+void sampleK(int bias,                  // read only
+             int N,                      // read only
+             int D,                      // read only
+             int K,                      // read only
+             char *C,                    // read only
+             int *R,                     // read only
+             double *s2Y,                // read only
+             double s2Rho,               // read only
+             gsl_matrix **Y,             // read only
+             gsl_matrix *Rho,            // read only
+             int *nest,                  // modified, but each thread is changing different pos
+             gsl_matrix **lambdanon,     // read only
+             int n,                      // read only
+             gsl_matrix *Zn,             // modified, A copy of Zn
+             gsl_matrix *Znon,           // read only
+             gsl_matrix_view *Qnon_view, // read only
+             gsl_matrix_view *Enon_view, // read only
+             gsl_matrix *Snon,           // read only
+             double *pArray,            // modified, but each k will modify different pos
+             const int *kArray,         // read only
+             int kArraySize,             // read only
+             int verbose                 // read only
+) {
+
+    gsl_matrix_view Lnon_view;
+    gsl_matrix_view Ydn;
+    gsl_matrix *muy;
+    gsl_matrix *s2y_p = gsl_matrix_alloc(1, 1);
+    gsl_matrix *aux;
+    double s2y_num;
+
+    for (int i = 0; i < kArraySize; i++) {
+        int k = kArray[i];
+        if (gsl_matrix_get(Zn, k, 0) == 1) { nest[k]--; }
+        if (nest[k] > 0) {
+            aux = gsl_matrix_alloc(1, K);
+            // z_nk=0
+            gsl_matrix_set(Zn, k, 0, 0);
+            matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
+
+            double lik0 = 0;
+            for (int d = 0; d < D; d++) {
+                gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
+                matrix_multiply(aux, Zn, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
+                s2y_num = gsl_matrix_get(s2y_p, 0, 0);
+                Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
+                Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
+                muy = gsl_matrix_alloc(1, R[d]);
+                matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
+                if (C[d] == 'c') {
+                    for (int r = 0; r < R[d] - 1; r++) {
+                        lik0 -= 0.5 / s2y_num *
+                                pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
+                                0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+                    }
+                } else {
+                    lik0 -= 0.5 / s2y_num *
+                            pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
+                            0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+                }
+                gsl_matrix_free(muy);
+            }
+            if (verbose > INFO) {
+                printf("-- lik0=%f\n", lik0);
+            }
+
+
+            chrono::steady_clock::time_point kBegin = chrono::steady_clock::now();
+            chrono::steady_clock::time_point kEnd;
+
+
+
+            //compute the pseudo-likelihood given Znk=0
+            log_likelihood_Rho(N, K, n, Znon, Zn, Rho, &Qnon_view->matrix, &Enon_view->matrix, s2Rho, &lik0);
+
+
+            kEnd = chrono::steady_clock::now();
+            if (verbose > INFO) {
+                cout << "likelihood rho cost = "
+                     << chrono::duration_cast<chrono::milliseconds>(kEnd - kBegin).count() << "[ms]" << endl;
+            }
+
+
+
+            // z_nk=1
+            gsl_matrix_set(Zn, k, 0, 1);
+            matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
+            double lik1 = 0;
+            for (int d = 0; d < D; d++) {
+                gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
+                matrix_multiply(aux, Zn, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
+                s2y_num = gsl_matrix_get(s2y_p, 0, 0);
+                Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
+                Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
+                muy = gsl_matrix_alloc(1, R[d]);
+                matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
+                if (C[d] == 'c') {
+                    for (int r = 0; r < R[d] - 1; r++) {
+                        lik1 -= 0.5 / s2y_num *
+                                pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
+                                0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+                    }
+                } else {
+                    lik1 -= 0.5 / s2y_num *
+                            pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
+                            0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+                }
+                gsl_matrix_free(muy);
+            }
+            if (verbose > INFO) {
+                printf("-- lik1=%f\n", lik1);
+            }
+            //Pseudo-likelihhod for H when z_nk=1 (marginalised)
+            log_likelihood_Rho(N, K, n, Znon, Zn, Rho, &Qnon_view->matrix, &Enon_view->matrix, s2Rho, &lik1);
+
+            if (verbose > INFO) {
+                printf("lik0=%f , lik1=%f \n", lik0, lik1);
+            }
+
+            double p0 = gsl_sf_log(N - nest[k]) + lik0;
+            double p1 = gsl_sf_log(nest[k]) + lik1;
+            double p1_n, p0_n;
+
+            if (verbose > INFO) {
+                printf("p1=%f, p0=%f \n", p1, p0);
+            }
+
+            if (p0 > p1) {
+                p1_n = expFun(p1 - p0);
+                p0_n = 1;
+            } else {
+                p0_n = expFun(p0 - p1);
+                p1_n = 1;
+            }
+            p1_n = p1_n / (p1_n + p0_n);
+            if (isinf(p1_n) || isnan(p1_n)) {
+                printf("nest[%d]=%d \n", k, nest[k]);
+                printf("lik0=%f , lik1=%f \n", lik0, lik1);
+                printf("EXECUTION STOPPED: numerical error at the sampler.\n Please restart the sampler and if error persists check hyper parameters. \n");
+                exit(1);
+            }
+            //sampling znk
+            if (drand48() > p1_n) {
+                gsl_matrix_set(Zn, k, 0, 0);
+                pArray[k] = lik0;
+            } else {
+                nest[k] += 1;
+                pArray[k] = lik1;
+            }
+            printf("after sampling : p[0]=%f, nest[%d]=%d\n", pArray[k], k, nest[k]);
+            gsl_matrix_free(aux);
+        } else {
+            gsl_matrix_set(Zn, k, 0, 0);
+        }
+    }
+
+    gsl_matrix_free(s2y_p);
+}
+
+
 // Functions section 3.1
 int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                      int bias,          //An extra latent feature
@@ -159,6 +320,10 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         for (int i = 0; i < TK; i++) {
             p[i] = 0.0;
         }
+        auto *pKArray = new double[K];
+        for (int i = 0; i < K; i++) {
+            pKArray[i] = 0.0;
+        }
 
 
         chrono::steady_clock::time_point begin = chrono::steady_clock::now();
@@ -200,8 +365,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         compute_inverse_Q_directly(N - 1, K, Znon, beta, &Qnon_view.matrix); // original
 
 
-
-
         end = chrono::steady_clock::now();
         if (verbose > INFO) {
             cout << "Prepare Qnon cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count()
@@ -210,17 +373,13 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         middle = end;
 
 
-
-
-
         //similar component as Lambda for the network part
 
         // by this point etanon is just a copy of eta
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
         // by this point Enon = S_{-n}^T * vec(rho -n, -n)
-//        rank_one_update_eta(&Z_view.matrix, &Zn.matrix, Rho, &Enon_view.matrix, n, K, N, 0);//removing Zn
 
-        // temp replace eta update
+        // eta update
         gsl_matrix *ZnonOZnon = gsl_matrix_alloc(Znon->size1 * Znon->size1, Znon->size2 * Znon->size2);
         gsl_Kronecker_product(ZnonOZnon, Znon, Znon);
         gsl_matrix *rhocy = gsl_matrix_alloc(Rho->size1, Rho->size2);
@@ -249,132 +408,62 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         middle = end;
 
 
-        // Sampling znk for k=1...K
-        for (int k = bias; k < K; k++) {
+        // Sampling znk for k=[bias,K-1]
 
-            if (gsl_matrix_get(&Zn.matrix, k, 0) == 1) { nest[k]--; }
-            if (nest[k] > 0) {
-                aux = gsl_matrix_alloc(1, K);
-                // z_nk=0
-                gsl_matrix_set(&Zn.matrix, k, 0, 0);
-                matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
+        // exclude k = 0
+        int group1Size = (K - bias) / 2;
+        int group2Size = K - bias - group1Size;
 
-                double lik0 = 0;
-                for (int d = 0; d < D; d++) {
-                    gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
-                    matrix_multiply(aux, &Zn.matrix, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
-                    s2y_num = gsl_matrix_get(s2y_p, 0, 0);
-                    Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
-                    Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
-                    muy = gsl_matrix_alloc(1, R[d]);
-                    matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
-                    if (C[d] == 'c') {
-                        for (int r = 0; r < R[d] - 1; r++) {
-                            lik0 -= 0.5 / s2y_num *
-                                    pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
-                                    0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                        }
-                    } else {
-                        lik0 -= 0.5 / s2y_num *
-                                pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
-                                0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                    }
-                    gsl_matrix_free(muy);
-                }
-                if (verbose > INFO) {
-                    printf("-- lik0=%f\n", lik0);
-                }
+        int *group1 = new int[group1Size];
+        int *group2 = new int[group2Size];
 
-
-                chrono::steady_clock::time_point kBegin = chrono::steady_clock::now();
-                chrono::steady_clock::time_point kEnd;
-
-
-
-                //compute the pseudo-likelihood given Znk=0
-                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, &lik0);
-
-
-                kEnd = chrono::steady_clock::now();
-                if (verbose > INFO) {
-                    cout << "likelihood rho cost = "
-                         << chrono::duration_cast<chrono::milliseconds>(kEnd - kBegin).count() << "[ms]" << endl;
-                }
-
-
-
-                // z_nk=1
-                gsl_matrix_set(&Zn.matrix, k, 0, 1);
-                matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-                double lik1 = 0;
-                for (int d = 0; d < D; d++) {
-                    gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
-                    matrix_multiply(aux, &Zn.matrix, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
-                    s2y_num = gsl_matrix_get(s2y_p, 0, 0);
-                    Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
-                    Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
-                    muy = gsl_matrix_alloc(1, R[d]);
-                    matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
-                    if (C[d] == 'c') {
-                        for (int r = 0; r < R[d] - 1; r++) {
-                            lik1 -= 0.5 / s2y_num *
-                                    pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
-                                    0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                        }
-                    } else {
-                        lik1 -= 0.5 / s2y_num *
-                                pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
-                                0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                    }
-                    gsl_matrix_free(muy);
-                }
-                if (verbose > INFO) {
-                    printf("-- lik1=%f\n", lik1);
-                }
-                //Pseudo-likelihhod for H when z_nk=1 (marginalised)
-                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, &lik1);
-
-                if (verbose > INFO) {
-                    printf("lik0=%f , lik1=%f \n", lik0, lik1);
-                }
-
-                double p0 = gsl_sf_log(N - nest[k]) + lik0;
-                double p1 = gsl_sf_log(nest[k]) + lik1;
-                double p1_n, p0_n;
-
-                if (verbose > INFO) {
-                    printf("p1=%f, p0=%f \n", p1, p0);
-                }
-
-                if (p0 > p1) {
-                    p1_n = expFun(p1 - p0);
-                    p0_n = 1;
+        int group1Pos = 0, group2Pos = 0;
+        for (int i = bias; i < K; i++) {
+            if (drand48() < 0.5) {
+                // 50% chance assign to group 1
+                if (group1Pos < group1Size) {
+                    // if group 1 still have spots
+                    group1[group1Pos] = i;
+                    group1Pos++;
                 } else {
-                    p0_n = expFun(p0 - p1);
-                    p1_n = 1;
+                    group2[group2Pos] = i;
+                    group2Pos++;
                 }
-                p1_n = p1_n / (p1_n + p0_n);
-                if (isinf(p1_n) || isnan(p1_n)) {
-                    printf("nest[%d]=%d \n", k, nest[k]);
-                    printf("lik0=%f , lik1=%f \n", lik0, lik1);
-                    printf("EXECUTION STOPPED: numerical error at the sampler.\n Please restart the sampler and if error persists check hyperparameters. \n");
-                    return 0;
-                }
-                //sampling znk
-                if (drand48() > p1_n) {
-                    gsl_matrix_set(&Zn.matrix, k, 0, 0);
-                    p[0] = lik0;
-                } else {
-                    nest[k] += 1;
-                    p[0] = lik1;
-                }
-                printf("after sampling : p[0]=%f, nest[%d]=%d\n", p[0], k, nest[k]);
-                gsl_matrix_free(aux);
             } else {
-                gsl_matrix_set(&Zn.matrix, k, 0, 0);
+                // 50% chance assign to group 2
+                if (group2Pos < group2Size) {
+                    group2[group2Pos] = i;
+                    group2Pos++;
+                } else {
+                    group1[group1Pos] = i;
+                    group1Pos++;
+                }
             }
         }
 
+        gsl_matrix *group1Zn = gsl_matrix_calloc(Zn.matrix.size1, Zn.matrix.size2);
+        gsl_matrix_memcpy(group1Zn, &Zn.matrix);
+
+        thread group1Thread(sampleK, bias, N, D, K, C, R, s2Y, s2Rho, Y, Rho, nest, lambdanon, n, group1Zn, Znon,
+                            &Qnon_view, &Enon_view, Snon, pKArray, group1, group1Size, verbose);
+
+        // group 2 run on main thread
+        sampleK(bias, N, D, K, C, R, s2Y, s2Rho, Y, Rho, nest, lambdanon, n, &Zn.matrix, Znon, &Qnon_view, &Enon_view,
+                Snon, pKArray, group2, group2Size, verbose);
+
+        // wait util group 1 finish
+        group1Thread.join();
+
+        // synchronize group 1 Zn to original Zn
+        for (int i = 0; i < group1Size; i++) {
+            gsl_matrix_set(&Zn.matrix, group1[i], 0, gsl_matrix_get(group1Zn, group1[i], 0));
+        }
+
+        gsl_matrix_free(group1Zn);
+        delete[] group1;
+        delete[] group2;
+
+        p[0] = pKArray[K - 1];
 
         end = chrono::steady_clock::now();
         if (verbose > INFO) {
@@ -483,11 +572,11 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         // Adding new features
-        //printf("add new features\n" );
         gsl_matrix_view Znew = gsl_matrix_submatrix(Z, K, 0, TK, N);
         gsl_matrix_set_zero(&Znew.matrix);
 
         if (K + TK < maxK) {
+            // todo pmax only takes the result from the last k
             double pmax = p[0];
             double kk = 0;
             // since TK is fixed to 2, thus this for loop will only run once
@@ -647,7 +736,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         gsl_matrix_memcpy(eta, etanon);
 
         delete[] p;
-
+        delete[] pKArray;
 
         end = chrono::steady_clock::now();
         if (verbose > INFO) {

@@ -7,6 +7,8 @@
 #include <vector>
 #include "ExtendFunction.h"
 
+#define LINUX_ENV 1
+
 using namespace std;
 
 /**

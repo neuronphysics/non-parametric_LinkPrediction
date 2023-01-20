@@ -17,11 +17,15 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_cdf.h>
 #include <gsl/gsl_randist.h>
-
-// if run in non linux environment, please add this line
-#include "FakeDrand48.h"
 #include "gpuAcc.h"
 #include <chrono>
+
+#include<thread>
+
+
+#ifndef LINUX_ENV
+#include "WindowsHeaders.h"
+#endif
 
 #define NO_OUTPUT 0
 #define INFO 1
