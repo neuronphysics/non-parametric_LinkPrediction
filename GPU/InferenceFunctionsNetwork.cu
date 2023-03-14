@@ -201,8 +201,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        cout << "Prepare Qnon cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]"
-             << endl;
+        LOG(OUTPUT_DEBUG, "Prepare Qnon cost =  %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
         //similar component as Lambda for the network part
@@ -216,8 +215,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
 
         end = chrono::steady_clock::now();
-        cout << "Prepare Enon and rho cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count()
-             << "[ms]" << endl;
+        LOG(OUTPUT_DEBUG, "Prepare Enon and rho cost =  %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
 
@@ -255,22 +253,8 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 }
                 LOG(OUTPUT_DEBUG, "-- lik0=%f\n", lik0);
 
-
-                chrono::steady_clock::time_point kBegin = chrono::steady_clock::now();
-                chrono::steady_clock::time_point kEnd;
-
-
-
                 //compute the pseudo-likelihood given Znk=0
                 log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, &lik0);
-
-
-                kEnd = chrono::steady_clock::now();
-                cout << "likelihood rho cost = " << chrono::duration_cast<chrono::milliseconds>(kEnd - kBegin).count()
-                     << "[ms]" << endl;
-
-
-
 
                 // z_nk=1
                 gsl_matrix_set(&Zn.matrix, k, 0, 1);
@@ -340,8 +324,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        cout << "Sample all K cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]"
-             << endl;
+        LOG(OUTPUT_INFO, "Sample all K cost =  %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
 
@@ -426,8 +409,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        cout << "Remove feature cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]"
-             << endl;
+        LOG(OUTPUT_DEBUG, "Remove feature cost = %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
 
@@ -576,8 +558,8 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        cout << "Add new feature cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]"
-             << endl;
+        LOG(OUTPUT_DEBUG, "Add new feature cost = %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+
         middle = end;
 
 
@@ -596,7 +578,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         // todo, compare the result with normal update
         rank_one_update_eta(&Z_view.matrix, &Zn.matrix, Rho, &Enon_view.matrix, n, K, N, 1);
 
-        cout << "start compare\n";
+        cout << "\nstart compare\n";
         gsl_matrix * EnonCopy = gsl_matrix_calloc(Enon_view.matrix.size1, Enon_view.matrix.size2);
         Znon = gsl_matrix_calloc(K, N - 1);
         remove_col(K, N, n, Znon, &Z_view.matrix);
@@ -605,8 +587,10 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         normal_update_eta(Znon, Rho, n, EnonCopy);
         for (int a = 0; a < Enon_view.matrix.size1; a++) {
             for (int b = 0; b < Enon_view.matrix.size2; b++) {
-                if (gsl_matrix_get(&Enon_view.matrix, a, b) != gsl_matrix_get(EnonCopy, a, b)) {
-                    cout << "there is an error in Enon copy\n";
+                double rank_one = gsl_matrix_get(&Enon_view.matrix, a, b);
+                double normal = gsl_matrix_get(EnonCopy, a, b);
+                if (rank_one != normal) {
+                    cout << "Exception: expect " << normal << " but rank one update get " << rank_one << endl;
                 }
             }
         }
@@ -621,16 +605,12 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        cout << "Update Z cost = " << chrono::duration_cast<chrono::milliseconds>(end - middle).count() << "[ms]"
-             << endl;
+        LOG(OUTPUT_DEBUG, "Update Z cost = %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
-        cout << "Total cost = " << chrono::duration_cast<chrono::milliseconds>(end - begin).count() << "[ms]" << endl;
+        LOG(OUTPUT_INFO, "Total cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count());
     }
 
-
-    //gsl_matrix_memcpy(A, &Qnon_view.matrix);
-    //gsl_linalg_cholesky_decomp (A);
     //end testing
     gsl_matrix_free(s2y_p);
     gsl_matrix_free(ZoZ);
@@ -1023,8 +1003,8 @@ int IBPsampler_func(double missing,
                     int maxK,
                     int Nsim) {
 
-    LOG(OUTPUT_DEBUG, "N=%d, D=%d, K=%d\n", N, D, K);
-    LOG(OUTPUT_DEBUG, "Running inference algorithm (currently inside C++ routine...)\n");
+    LOG(OUTPUT_NORMAL, "N=%d, D=%d, K=%d", N, D, K);
+    LOG(OUTPUT_INFO, "Running inference algorithm (currently inside C++ routine...)");
 
     //.....INIZIALIZATION........//
     double s2theta = 2;
@@ -1245,6 +1225,7 @@ int IBPsampler_func(double missing,
     for (int it = 0; it < Nsim; it++) {
 
         /// different from the old version, because additional features
+        LOG(OUTPUT_NORMAL, "Start iteration %d", it);
         gsl_vector2matrix(vecRho, Rho);
         int Kaux = AcceleratedGibbs(maxK, bias, N, D, Kest, C, R, alpha, s2B, s2Y, s2H, s2Rho, Y, Rho, vecRho, Z, nest,
                                     P, Pnon, lambda, lambdanon, Q, Qnon, Eta, Etanon, &ldet_Q, &ldet_Q_n);

@@ -17,6 +17,7 @@ venv.bak/
 .vscode/
 
 # Temporary files
+**/draft/
 draft.ipynb
 GPU/dataset/._*.txt
 GPU/dataset/facebook/._*.txt

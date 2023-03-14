@@ -220,7 +220,7 @@ void inverse(gsl_matrix *Amat, int Asize) {
     gpuInverseMethod1(Amat, Amat);
     chrono::steady_clock::time_point end = chrono::steady_clock::now();
 
-    LOG(OUTPUT_INFO, "Inverse cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
+    LOG(OUTPUT_DEBUG, "Inverse cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
 }
 
 
@@ -359,7 +359,7 @@ double gsl_trace(gsl_matrix *A) {
     int r = A->size1;
     int c = A->size2;
     if (r != c) {
-        LOG(OUTPUT_DEBUG,"e_r_r_o_r: cannot calculate trace of non-square matrix.\n");
+        LOG(OUTPUT_DEBUG,"error: cannot calculate trace of non-square matrix.\n");
         return 0;
     }
     // calculate sum of diagonal elements
