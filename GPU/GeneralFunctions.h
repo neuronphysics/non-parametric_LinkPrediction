@@ -22,7 +22,7 @@
 #include "FakeDrand48.h"
 #include "gpuAcc.h"
 #include <chrono>
-
+#include "Log.h"
 
 //Transformations
 double fre_1(double x, double func, double mu, double w);
@@ -108,4 +108,5 @@ int inverse_matrix_Q(double alpha, gsl_matrix *Z, gsl_matrix *X, int N, int K, d
 
 void compute_inverse_Q_directly(int N, int K, gsl_matrix *Z, double beta, gsl_matrix *Q);
 
+void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * Enon);
 #endif

@@ -12,6 +12,7 @@
 
 
 using namespace std;
+
 /**
 Function to call inference routine for GLFM model from Python code
         Inputs:
@@ -47,23 +48,18 @@ Function to call inference routine for GLFM model from Python code
 
 void
 infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin, int N, int D, int K, double F,
-      int bias, double s2u, double s2B, double s2H, double alpha, int Nsim, int maxK, double missing, int verbose) {
-
-
-
+      int bias, double s2u, double s2B, double s2H, double alpha, int Nsim, int maxK, double missing) {
     gsl_matrix_view Xview, Zview, Aview;
     gsl_matrix *X;
     gsl_matrix *A;
     gsl_matrix *Zm;
 
-    if (verbose) {
-        printf("N=%d, D=%d, K=%d\n", N, D, K);
-    }
+    LOG(OUTPUT_DEBUG, "N=%d, D=%d, K=%d", N, D, K);
 
 
     // transpose input matrices in order to be able to call inner C function
     if (strlen(Cin) != D) {
-        printf("EXCEPTION! Size of C and X are not consistent!");
+        LOG(OUTPUT_NORMAL, "EXCEPTION! Size of C and X are not consistent!");
         return;
     }
 
@@ -78,7 +74,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
         }
     }
 
-    char * C = new char[D];
+    char *C = new char[D];
     for (int d = 0; d < D; d++) {
         // convert to lower case
         C[d] = (char) tolower(Cin[d]);
@@ -106,19 +102,20 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     auto *w = (double *) malloc(D * sizeof(double));
     auto *mu = (double *) malloc(D * sizeof(double));
     auto *s2Y = (double *) malloc(D * sizeof(double));
-    auto * R = new int32_t[D];
-    printf("In C++: transforming input data...");
+    auto *R = new int32_t[D];
+    LOG(OUTPUT_DEBUG, "In C++: transforming input data...");
     // always return 1
     int maxR = initialize_func(N, D, maxK, missing, X, C, B, theta, R, Fin, mu, w, s2Y);
-    printf("done\n");
 
-    if (verbose) {
-        printf("maxR = %d", maxR);
-    }
+    LOG(OUTPUT_DEBUG, "done");
+
+
+    LOG(OUTPUT_DEBUG, "maxR = %d", maxR);
+
 
 
     //...............Inference Function.......................##
-    printf("\nEntering C++: Running Inference Routine...\n");
+    LOG(OUTPUT_DEBUG, "\nEntering C++: Running Inference Routine...\n");
     double s2Rho;
     if (Net[0] == 'w') {
         s2Rho = 2;
@@ -130,7 +127,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     int Kest = IBPsampler_func(missing, X, C, Net, Z, B, theta,
                                H, A, R, &Fin[0], F, &mu[0], &w[0],
                                maxR, bias, N, D, K, alpha, s2B, &s2Y[0], s2Rho, s2H, s2u, maxK, Nsim);
-    printf("\nBack to Python: OK\n");
+    LOG(OUTPUT_DEBUG, "\nBack to Python: OK\n");
 
 
 
@@ -159,9 +156,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     }
 
 
-    if (verbose) {
-        printf("Kest=%d, N=%d\n", Kest, N);
-    }
+    LOG(OUTPUT_DEBUG, "Kest=%d, N=%d\n", Kest, N);
 
 
     for (int i = 0; i < N; i++) {
@@ -178,15 +173,13 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     }
 
 
-    if (verbose) {
-        printf("Z_out loaded");
-    }
+    LOG(OUTPUT_DEBUG, "Z_out loaded");
 
 
     gsl_matrix_view Bd_view;
     gsl_matrix *BT;
     int idx_tmp;
-    printf("B_out[D,Kest,maxR] where D=%d, Kest=%d, maxR=%d", D, Kest, maxR);
+    LOG(OUTPUT_DEBUG, "B_out[D,Kest,maxR] where D=%d, Kest=%d, maxR=%d", D, Kest, maxR);
 
     for (int d = 0; d < D; d++) {
         if (C[d] == 'o') {
@@ -206,9 +199,8 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
         gsl_matrix_free(BT);
     }
 
-    if (verbose) {
-        printf("B_out loaded");
-    }
+
+    LOG(OUTPUT_DEBUG, "B_out loaded");
 
 
     for (int d = 0; d < D; d++) {
@@ -220,9 +212,8 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     }
 
 
-    if (verbose) {
-        printf("theta_out loaded");
-    }
+    LOG(OUTPUT_DEBUG, "theta_out loaded");
+
 
     //..... Free memory.....
     for (int d = 0; d < D; d++) {

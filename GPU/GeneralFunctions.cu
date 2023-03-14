@@ -2,24 +2,19 @@
 
 
 using namespace std;
-// Transformations
-/*double f(double x, double w){
-    return logFun(1+w*gsl_sf_exp(x));
-}*/
+
 double fre_1(double x, double func, double mu, double w) {
-//     if (func==1){
     return w * (x - mu);
-//     }
 }
 
 double f_1(double x, double func, double mu, double w) {
-//     printf("pos = %f ", logFun(gsl_sf_exp(w*(x-mu))-1));
+
     if (func == 1) {
         return logFun(gsl_sf_exp(w * (x - mu)) - 1);
     } else if (func == 2) {
         return sqrt(w * (x - mu));
     } else {
-        printf("error: unknown transformation function. Used default transformation log(exp(y)-1)");
+        LOG(OUTPUT_DEBUG,"error: unknown transformation function. Used default transformation log(exp(y)-1)");
         return logFun(gsl_sf_exp(w * (x - mu)) - 1);
     }
 }
@@ -36,7 +31,7 @@ double f_w(double x, double func, double mu, double w) {
     } else if (func == 2) {
         return sqrt(w * (x - mu));
     } else {
-        printf("error: unknown transformation function. Used default transformation log(exp(y)-1)");
+        LOG(OUTPUT_DEBUG,"error: unknown transformation function. Used default transformation log(exp(y)-1)");
         if (x != 0) {
             return (1 / w) * (logFun(gsl_sf_exp(x) - 1) - mu);
         } else {
@@ -114,10 +109,10 @@ double compute_matrix_max(double missing, gsl_matrix *v) {
 
 double logFun(double x) {
     if (x == 0) {
-        fprintf(stderr, "logarithm of 0 is -inf \n");
+        LOG(OUTPUT_DEBUG,"logarithm of 0 is -inf \n");
         return GSL_NEGINF;
     } else if (x < 0) {
-        fprintf(stderr, "Error: logarithm is not defined for negative numbers\n");
+        LOG(OUTPUT_DEBUG,"Error: logarithm is not defined for negative numbers\n");
         return -1;
     } else { return gsl_sf_log(x); }
 }
@@ -138,37 +133,7 @@ int factorial(int N) {
 
 void matrix_multiply(gsl_matrix *A, gsl_matrix *B, gsl_matrix *C, double alpha, double beta, CBLAS_TRANSPOSE_t TransA,
                      CBLAS_TRANSPOSE_t TransB) {
-
-
-//    chrono::steady_clock::time_point begin = chrono::steady_clock::now();
-
-    // gpu
-//    gsl_matrix * gpuRes = gsl_matrix_alloc(C->size1, C->size2);
-//    gsl_matrix_memcpy(gpuRes, C);
     gpuMatrixMultiply(A, B, C, alpha, beta, TransA, TransB);
-
-
-    // cpu
-    // Compute C = alpha* A B + beta *C
-//    gsl_blas_dgemm(TransA, TransB, alpha, A, B, beta, C);
-
-
-//     compare
-//    for(int i = 0; i < C->size1; i++){
-//        for(int j = 0; j < C->size2; j++){
-//            if(abs(gsl_matrix_get(C, i, j) - gsl_matrix_get(gpuRes, i, j)) > 0.0001){
-//                printf("gpu cal error!");
-//            }
-//        }
-//    }
-
-    // clean up
-//    gsl_matrix_free(gpuRes);
-
-//    chrono::steady_clock::time_point end = chrono::steady_clock::now();
-
-//    std::cout << "Multiply cost = " << chrono::duration_cast<chrono::milliseconds>(end - begin).count() << "[ms]" << endl;
-
 }
 
 double *column_to_row_major_order(double *A, int nRows, int nCols) {
@@ -176,7 +141,7 @@ double *column_to_row_major_order(double *A, int nRows, int nCols) {
     //mxArray *copy_mx = mxCreateDoubleMatrix(nRows,nCols,mxREAL);
     double *copy = (double *) malloc(nRows * nCols * sizeof(double));
     if (NULL == copy) {
-        fprintf(stderr, "Not enough memory (in column_to_row_major_order)\n");
+        LOG(OUTPUT_DEBUG,"Not enough memory (in column_to_row_major_order)\n");
         //mexErrMsgTxt("Not enough memory (in column_to_row_major_order)\n");
     }
 
@@ -252,39 +217,10 @@ double lndet_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace) {
 
 void inverse(gsl_matrix *Amat, int Asize) {
     chrono::steady_clock::time_point begin = chrono::steady_clock::now();
-
-    // gpu inverse
-    gsl_matrix * gpuInverseRes = gsl_matrix_alloc(Amat->size1, Amat->size2);
-    gpuInverseMethod1(Amat, gpuInverseRes);
-
-    // cpu inverse
-    // Make LU decomposition of matrix m
-    // it requires Amat to be positive definite
-    int res = gsl_linalg_cholesky_decomp(Amat);
-    if (res == 1) {
-//         dom error
-        printf("dom error, not positive definite\n");
-    }
-
-    // Invert the matrix m
-    gsl_linalg_cholesky_invert(Amat);
-
-
-    // compare
-    for(int i = 0; i < Amat->size1; i++){
-        for(int j = 0; j < Amat->size1; j++){
-            if(abs(gsl_matrix_get(Amat, i, j) - gsl_matrix_get(gpuInverseRes, i, j)) > 0.000000001){
-                printf("gpu inverse error!");
-            }
-        }
-    }
-
-    // clean up
-    gsl_matrix_free(gpuInverseRes);
-
+    gpuInverseMethod1(Amat, Amat);
     chrono::steady_clock::time_point end = chrono::steady_clock::now();
 
-    std::cout << "Inverse cost = " << chrono::duration_cast<chrono::milliseconds>(end - begin).count() << "[ms]" << endl;
+    LOG(OUTPUT_INFO, "Inverse cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
 }
 
 
@@ -356,7 +292,7 @@ void mvnrnd(gsl_vector *x, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_r
 
 double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
 
-    if (xlo > xhi) { printf("error: xlo<xhi"); }
+    if (xlo > xhi) { LOG(OUTPUT_DEBUG,"error: xlo<xhi"); }
     // when (xlo - mu) / sigma greater than 5, the result will be 1, resulting z = inf
     double plo = gsl_cdf_ugaussian_P((xlo - mu) / sigma);
     if (plo == 1) {
@@ -376,10 +312,6 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
     }
 
     double z = gsl_cdf_ugaussian_Pinv(res);
-    //if (gsl_isnan(mu+z*sigma)){printf("mu=%f, xlo= %f, xhi= %f \n",mu, xlo,  xhi);}
-//    if(isinf(z)){
-//        printf("inf\n");
-//    }
     return mu + z * sigma;
 }
 
@@ -427,7 +359,7 @@ double gsl_trace(gsl_matrix *A) {
     int r = A->size1;
     int c = A->size2;
     if (r != c) {
-        printf("e_r_r_o_r: cannot calculate trace of non-square matrix.\n");
+        LOG(OUTPUT_DEBUG,"e_r_r_o_r: cannot calculate trace of non-square matrix.\n");
         return 0;
     }
     // calculate sum of diagonal elements
@@ -524,9 +456,9 @@ int rank_one_update_Kronecker_ldet(gsl_matrix *Z,
             coeff *= nu;
         }
     }
-    //printf("new coefficient = %f....\n",coeff);
+    
     ldet_Q[0] += gsl_sf_log(coeff);
-    printf("log(det(Q))=%f....\n", ldet_Q[0]);
+    LOG(OUTPUT_DEBUG,"log(det(Q))=%f....\n", ldet_Q[0]);
     gsl_matrix_free(aux);
     gsl_matrix_free(base);
     return 0;
@@ -709,30 +641,7 @@ gsl_matrix *inverse_sigma_rho(gsl_matrix *Znon,//Kx(N-1)
     gsl_matrix_free(aux);
     gsl_matrix_free(base);
     gsl_matrix_free(F);
-    //Begin test
-    /*
-    gsl_matrix_view Q_view = gsl_matrix_submatrix (Q, 0, 0, K*K, K*K);
-    gsl_matrix *SQnon      = gsl_matrix_calloc(N, K*K);
-    gsl_matrix *S          = gsl_matrix_calloc(K*K, N);
-    gsl_Kronecker_product (S, Z, Zn);// S= (Z_{-n} kronnecker_product Zn)^T
-    matrix_multiply(S, &Q_view.matrix, SQnon, 1, 0, CblasTrans, CblasNoTrans);//QS=S.Qnon
-
-    //compute the covariance
-    gsl_matrix *Sig      = gsl_matrix_calloc(N, N);
-    gsl_matrix_set_identity (Sig);
-    matrix_multiply( SQnon, S, Sig, s2Rho, s2Rho, CblasNoTrans, CblasNoTrans);
-    gsl_matrix *invSigma   = gsl_matrix_calloc(N, N);
-    gsl_matrix_memcpy (invSigma, Sig);
-    inverse(invSigma, N);
-    gsl_matrix_sub (invSigma, sigma);
-    printf("computed sigma .....\n");
-    for (int row=0; row<N; ++row)
-        for (int col=0; col<N; ++col)
-            printf(col==N-1?"%6.3f\n":"%6.3f ",gsl_matrix_get(invSigma,row,col));
-    gsl_matrix_free(invSigma);
-    */
-    //End test
-
+    
     return sigma;
 }
 
@@ -803,4 +712,26 @@ void compute_inverse_Q_directly(int N,
 
     inverse(Q, K * K);
     gsl_matrix_free(S);
+}
+
+// will only update Enon, Znon and Rho will not be touched
+void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * Enon){
+    gsl_matrix *ZnonOZnon = gsl_matrix_alloc(Znon->size1 * Znon->size1, Znon->size2 * Znon->size2);
+    gsl_Kronecker_product(ZnonOZnon, Znon, Znon);
+    gsl_matrix *rhocy = gsl_matrix_alloc(Rho->size1, Rho->size2);
+    gsl_matrix_memcpy(rhocy, Rho);
+
+    for (int i = n; i < Rho->size1 - 1; i++) {
+        gsl_matrix_swap_rows(rhocy, i, i + 1);
+        gsl_matrix_swap_columns(rhocy, i, i + 1);
+    }
+    gsl_matrix_view rho_n_n = gsl_matrix_submatrix(rhocy, 0, 0, Rho->size1 - 1, Rho->size2 - 1);
+    gsl_matrix *vecRho_n_n = gsl_matrix_alloc((Rho->size1 - 1) * (Rho->size2 - 1), 1);
+    gsl_matrix2vector(vecRho_n_n, &rho_n_n.matrix);
+
+    matrix_multiply(ZnonOZnon, vecRho_n_n, Enon, 1, 0, CblasNoTrans, CblasNoTrans);
+
+    gsl_matrix_free(ZnonOZnon);
+    gsl_matrix_free(rhocy);
+    gsl_matrix_free(vecRho_n_n);
 }
