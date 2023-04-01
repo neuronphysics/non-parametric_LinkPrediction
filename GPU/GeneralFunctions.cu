@@ -133,6 +133,7 @@ int factorial(int N) {
 
 void matrix_multiply(gsl_matrix *A, gsl_matrix *B, gsl_matrix *C, double alpha, double beta, CBLAS_TRANSPOSE_t TransA,
                      CBLAS_TRANSPOSE_t TransB) {
+    // C = alpha * AB + beta * C
     gpuMatrixMultiply(A, B, C, alpha, beta, TransA, TransB);
 }
 
@@ -480,7 +481,9 @@ int rank_one_update_eta(gsl_matrix *Z,
     gsl_Kronecker_product(S1, zn, Z);
     gsl_Kronecker_product(S2, Z, zn);
     gsl_Kronecker_product(S3, zn, zn);
+    // whole column
     gsl_matrix_view Rho_view = gsl_matrix_submatrix(Rho, 0, index, N, 1);
+    // whole row
     gsl_matrix_view RhoT_view = gsl_matrix_submatrix(Rho, index, 0, 1, N);
     gsl_matrix_view Rho_nn = gsl_matrix_submatrix(Rho, index, index, 1, 1);
     if (add == 0) {//remove

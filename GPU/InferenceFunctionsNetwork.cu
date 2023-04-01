@@ -10,6 +10,43 @@ using namespace std;
 //**********************************************************************************************************************//
 //**********************************************************************************************************************//
 
+double compute_likelihood_given_znk(int D,
+                                    int K,
+                                    int n,
+                                    double *s2Y,
+                                    char *C,
+                                    int *R,
+                                    gsl_matrix *s2y_p,
+                                    gsl_matrix *aux,
+                                    gsl_matrix *Zn,
+                                    gsl_matrix **Y,
+                                    gsl_matrix **lambdanon) {
+    double likelihood = 0;
+    for (int d = 0; d < D; d++) {
+        gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
+        matrix_multiply(aux, Zn, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
+        double s2y_num = gsl_matrix_get(s2y_p, 0, 0);
+        gsl_matrix_view Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
+        gsl_matrix_view Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
+        gsl_matrix *muy = gsl_matrix_alloc(1, R[d]);
+        matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
+        if (C[d] == 'c') {
+            for (int r = 0; r < R[d] - 1; r++) {
+                likelihood -= 0.5 / s2y_num *
+                              pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
+                              0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+            }
+        } else {
+            likelihood -= 0.5 / s2y_num *
+                          pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
+                          0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+        }
+        gsl_matrix_free(muy);
+    }
+    return likelihood;
+}
+
+
 int log_likelihood_Rho(int N,
                        int K,
                        int r,
@@ -19,7 +56,7 @@ int log_likelihood_Rho(int N,
                        gsl_matrix *Qnon,
                        gsl_matrix *Eta,// Snon^T vec(Rho -n, -n)
                        double s2Rho,
-                       double *lik
+                       double &lik
 ) {
     //*******
     gsl_matrix *mu = gsl_matrix_calloc(N - 1, 1);// (Z_{-n} Kronecker_Product Zn ) Qnon . Snon. vec(Rho_n)
@@ -42,7 +79,7 @@ int log_likelihood_Rho(int N,
     gsl_matrix_scale(invSigma, s2Rho);
     double s2rho_p = lndet_get(invSigma, N - 1, N - 1, 0);//logdet(X)=log(detX)
     inverse(invSigma, N - 1);
-    //End testing
+
     //compute the mean
     matrix_multiply(SQnon, Eta, mu, 1, 0, CblasNoTrans, CblasNoTrans);
     //compute the likelihood
@@ -68,7 +105,7 @@ int log_likelihood_Rho(int N,
     matrix_multiply(aux, Rho_non, Val, 1, 0, CblasNoTrans, CblasTrans);
 
     // (N - 1) * gsl_sf_log(2 * M_PI) = 113.46
-    lik[0] -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + s2rho_p);
+    lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + s2rho_p);
 
     //free the pointers
     gsl_matrix_free(mu);
@@ -88,7 +125,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                      int N,             //Number of objects
                      int D,             //Number of attributes
                      int K,             //Number of latent features
-                     char *C,           //Categorical data??
+                     char *C,           //data type
                      int *R,            //The number of categories in each discrete attribute
                      double alpha,      //The concentration parameter
                      double s2B,        //variance of the weighting matrix??
@@ -112,7 +149,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                      double *ldet_Q_n
 
 ) {
-    //int flagErr=0;
     int TK = 2;
     gsl_matrix_view Zn;
     gsl_matrix_view Pnon_view;
@@ -127,21 +163,16 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
     gsl_matrix *Snon;//Snon= P^{-1}
     double beta = s2Rho / s2H; //temperory variable
     double s2y_num;//sigma=sigma_{y}
-    gsl_matrix *ZoZ = gsl_matrix_calloc(maxK * maxK, N * N);//for updating eta
+    gsl_matrix *ZoZ = gsl_matrix_calloc(maxK * maxK, N * N);
 
-    //Extra matrices we define for expanding Q, when we add new features
-    //
     gsl_matrix *Iden;//Identity matrix
     gsl_matrix *Qexp;
     gsl_matrix *Qmatrix;
     gsl_matrix_view Qmatrix_view;
     gsl_matrix_view Qexp_view;
     gsl_matrix_view Q_view;
-    //
-    //End adding features
 
     gsl_matrix *Znon;
-    // This function copies the elements of the matrix P into the matrix Pnon.
     gsl_matrix_memcpy(Pnon, P);
 
     for (int d = 0; d < D; d++) {
@@ -177,8 +208,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         // Snon=Pnon_view^{-1}
         inverse(Snon, K);
         // Pnon_view=-1*Zn*Zn+1*Pnon_view
-        matrix_multiply(&Zn.matrix, &Zn.matrix, &Pnon_view.matrix, -1, 1, CblasNoTrans,
-                        CblasTrans);
+        matrix_multiply(&Zn.matrix, &Zn.matrix, &Pnon_view.matrix, -1, 1, CblasNoTrans, CblasTrans);
 
         for (int d = 0; d < D; d++) {
             Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
@@ -201,91 +231,48 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        LOG(OUTPUT_DEBUG, "Prepare Qnon cost =  %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        LOG(OUTPUT_DEBUG, "Prepare Qnon cost =  %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
         //similar component as Lambda for the network part
 
         // by this point etanon is just a copy of eta
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
-        // by this point Enon = S_{-n}^T * vec(rho -n, -n)
-//        rank_one_update_eta(&Z_view.matrix, &Zn.matrix, Rho, &Enon_view.matrix, n, K, N, 0);//removing Zn
 
         // temp replace eta update
         normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
 
         end = chrono::steady_clock::now();
-        LOG(OUTPUT_DEBUG, "Prepare Enon and rho cost =  %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        LOG(OUTPUT_DEBUG, "Prepare Enon and rho cost =  %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
 
         // Sampling znk for k=1...K
         for (int k = bias; k < K; k++) {
 
-            if (gsl_matrix_get(&Zn.matrix, k, 0) == 1) { nest[k]--; }
+            if (gsl_matrix_get(&Zn.matrix, k, 0) == 1) {
+                nest[k]--;
+            }
             if (nest[k] > 0) {
                 aux = gsl_matrix_alloc(1, K);
                 // z_nk=0
                 gsl_matrix_set(&Zn.matrix, k, 0, 0);
                 matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-
-                double lik0 = 0;
-                for (int d = 0; d < D; d++) {
-                    gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
-                    matrix_multiply(aux, &Zn.matrix, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
-                    s2y_num = gsl_matrix_get(s2y_p, 0, 0);
-                    Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
-                    Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
-                    muy = gsl_matrix_alloc(1, R[d]);
-                    matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
-                    if (C[d] == 'c') {
-                        for (int r = 0; r < R[d] - 1; r++) {
-                            lik0 -= 0.5 / s2y_num *
-                                    pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
-                                    0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                        }
-                    } else {
-                        lik0 -= 0.5 / s2y_num *
-                                pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
-                                0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                    }
-                    gsl_matrix_free(muy);
-                }
+                double lik0 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, &Zn.matrix, Y, lambdanon);
                 LOG(OUTPUT_DEBUG, "-- lik0=%f\n", lik0);
-
                 //compute the pseudo-likelihood given Znk=0
-                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, &lik0);
+                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, lik0);
 
                 // z_nk=1
                 gsl_matrix_set(&Zn.matrix, k, 0, 1);
                 matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-                double lik1 = 0;
-                for (int d = 0; d < D; d++) {
-                    gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
-                    matrix_multiply(aux, &Zn.matrix, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
-                    s2y_num = gsl_matrix_get(s2y_p, 0, 0);
-                    Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
-                    Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
-                    muy = gsl_matrix_alloc(1, R[d]);
-                    matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
-                    if (C[d] == 'c') {
-                        for (int r = 0; r < R[d] - 1; r++) {
-                            lik1 -= 0.5 / s2y_num *
-                                    pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
-                                    0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                        }
-                    } else {
-                        lik1 -= 0.5 / s2y_num *
-                                pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
-                                0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                    }
-                    gsl_matrix_free(muy);
-                }
+                double lik1 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, &Zn.matrix, Y, lambdanon);
                 LOG(OUTPUT_DEBUG, "-- lik1=%f\n", lik1);
                 //Pseudo-likelihhod for H when z_nk=1 (marginalised)
-                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, &lik1);
+                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, lik1);
 
-                //***********
                 LOG(OUTPUT_DEBUG, "lik0=%f , lik1=%f \n", lik0, lik1);
                 double p0 = gsl_sf_log(N - nest[k]) + lik0;
                 double p1 = gsl_sf_log(nest[k]) + lik1;
@@ -324,7 +311,8 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        LOG(OUTPUT_INFO, "Sample all K cost =  %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        LOG(OUTPUT_INFO, "Sample all K cost =  %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
 
@@ -370,8 +358,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             }
             //****************** Update Q & Qnon *********************
             //remove the empty column in matrix Z and its corresponding features in Q
-            //tested and approved
-            //inverse_matrix_Q(beta, Z, Q, N, K, ldet_Q);
             Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
 
             gsl_matrix_set_identity(Q);
@@ -381,7 +367,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             inverse(&Q_view.matrix, K * K);
 
             ldet_Q[0] = lndet_get(&Q_view.matrix, K * K, K * K, 0);
-            //Test
 
             gsl_matrix_memcpy(Qnon, Q);
             memcpy(ldet_Q_n, ldet_Q, sizeof(double));
@@ -395,8 +380,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             LOG(OUTPUT_DEBUG, "Removing a feature column ldet_Q=%f, ldet_Qnon = %f\n", ldet_Q[0],
                 lndet_get(&Qnon_view.matrix, K * K, K * K, 0));
 
-            //Update_Q_after_removing(N, K, n, beta, &Z_view.matrix, &Qnon_view.matrix, 0 );
-            //update eta 31.12.2018
             matrix_multiply(ZoZ, vecRho, eta, 1, 0, CblasNoTrans, CblasNoTrans);
             gsl_matrix_memcpy(etanon, eta);
             Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
@@ -409,10 +392,9 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        LOG(OUTPUT_DEBUG, "Remove feature cost = %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        LOG(OUTPUT_DEBUG, "Remove feature cost = %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
-
-
 
 
 
@@ -437,32 +419,11 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 gsl_matrix_memcpy(Snon, &Pnon_view.matrix);
                 inverse(Snon, K + j);
                 Zn = gsl_matrix_submatrix(Z, 0, n, K + j, 1);
+
                 gsl_matrix_set(&Zn.matrix, K + j - 1, 0, 1);
                 matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-                double lik = 0;
-                for (int d = 0; d < D; d++) {
-                    gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
-                    matrix_multiply(aux, &Zn.matrix, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
-                    s2y_num = gsl_matrix_get(s2y_p, 0, 0);
-                    Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
-                    Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K + j, R[d]);
-                    muy = gsl_matrix_alloc(1, R[d]);
-                    matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
-                    if (C[d] == 'c') {
-                        for (int r = 0; r < R[d] - 1; r++) {
-                            lik -= 0.5 / s2y_num *
-                                   pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
-                                   0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                        }
-                    } else {
-                        lik -= 0.5 / s2y_num * pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
-                               0.5 * gsl_sf_log(2 * M_PI * s2y_num);
-                    }
-                    gsl_matrix_free(muy);
-                }
 
-                //****************Is the value of Z_{n(K+j-1)} already changed
-                //adding one column to Z changes Q as following (tested and it works)
+                double lik = compute_likelihood_given_znk(D, K + j, n, s2Y, C, R, s2y_p, aux, &Zn.matrix, Y, lambdanon);
 
                 Iden = gsl_matrix_calloc(K, K);
                 gsl_matrix_set_identity(Iden);
@@ -500,20 +461,15 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
                 //Setting up the calculation of the log likelihood of adding a new feature
-                //Qnon_view   = gsl_matrix_submatrix (Qnon, 0, 0, (K+j)*(K+j), (K+j)*(K+j));
 
                 Z_view = gsl_matrix_submatrix(Z, 0, 0, K + j, N);
                 Znon = gsl_matrix_calloc(K + j, N - 1);
                 remove_col(K + j, N, n, Znon, &Z_view.matrix);
-                //Update_Q_after_removing(N, K, n, beta, &Z_view.matrix, &Qnon_view.matrix, 0 );
-                //update eta 31.12.2018
 
                 Enon_view = gsl_matrix_submatrix(etanon, 0, 0, (K + j) * (K + j), 1);
 
                 log_likelihood_Rho(N, K + j, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho,
-                                   &lik);
-
-                //****************
+                                   lik);
 
                 p[j] = lik + j * gsl_sf_log(alpha / N) - gsl_sf_log(factorial(j));
                 gsl_matrix_free(aux);
@@ -542,13 +498,16 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 for (int k = K; k < K + Knew; k++) { nest[k] = 1; }
             }
             K += Knew;
-
         }
+
         //Adding Zn
         Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
         Pnon_view = gsl_matrix_submatrix(Pnon, 0, 0, K, K);
         matrix_multiply(&Zn.matrix, &Zn.matrix, &Pnon_view.matrix, 1, 1, CblasNoTrans, CblasTrans);
+
+        // todo maybe we should move this part outside the for loop, it does not make sense
         gsl_matrix_memcpy(P, Pnon);
+
         for (int d = 0; d < D; d++) {
             Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
             Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
@@ -558,11 +517,10 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        LOG(OUTPUT_DEBUG, "Add new feature cost = %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        LOG(OUTPUT_DEBUG, "Add new feature cost = %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
 
         middle = end;
-
-
 
 
         //****************Update Q and log(det(Q))
@@ -570,34 +528,17 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
         Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
 
-        //rank_one_update_Kronecker(&Z_view.matrix, &Zn.matrix, &Qnon_view.matrix, n, K, N, 1); // add Zn ****????
+        // compute full Q with new Z
         compute_inverse_Q_directly(N, K, &Z_view.matrix, beta, &Qnon_view.matrix);
-        //Update_Q_after_removing(N, K, n, beta, &Z_view.matrix, &Qnon_view.matrix, 1 );
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
 
-        // todo, compare the result with normal update
-        rank_one_update_eta(&Z_view.matrix, &Zn.matrix, Rho, &Enon_view.matrix, n, K, N, 1);
-
-        cout << "\nstart compare\n";
-        gsl_matrix * EnonCopy = gsl_matrix_calloc(Enon_view.matrix.size1, Enon_view.matrix.size2);
         Znon = gsl_matrix_calloc(K, N - 1);
         remove_col(K, N, n, Znon, &Z_view.matrix);
 
+        normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
 
-        normal_update_eta(Znon, Rho, n, EnonCopy);
-        for (int a = 0; a < Enon_view.matrix.size1; a++) {
-            for (int b = 0; b < Enon_view.matrix.size2; b++) {
-                double rank_one = gsl_matrix_get(&Enon_view.matrix, a, b);
-                double normal = gsl_matrix_get(EnonCopy, a, b);
-                if (rank_one != normal) {
-                    cout << "Exception: expect " << normal << " but rank one update get " << rank_one << endl;
-                }
-            }
-        }
-        gsl_matrix_free(EnonCopy);
         gsl_matrix_free(Znon);
 
-        // by this point Q's sub-matrix is updated by Qnon_view
         gsl_matrix_memcpy(Q, Qnon);
         gsl_matrix_memcpy(eta, etanon);
 
@@ -605,7 +546,8 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         end = chrono::steady_clock::now();
-        LOG(OUTPUT_DEBUG, "Update Z cost = %lld [ms]",chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        LOG(OUTPUT_DEBUG, "Update Z cost = %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
         LOG(OUTPUT_INFO, "Total cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count());
@@ -1151,7 +1093,7 @@ int IBPsampler_func(double missing,
                     }
                 }
                 break;
-
+                // todo add binary here
         }
         // R[d] is always 1
         lambda[d] = gsl_matrix_calloc(maxK, R[d]);
@@ -1407,8 +1349,8 @@ int initialize_func(int N,
     gsl_vector_view Xd_view;
     for (int d = 0; d < D; d++) {
         Xd_view = gsl_matrix_row(X, d);
-        maxX[d] = compute_vector_max(N, missing, &Xd_view.vector);//gsl_vector_max(&Xd_view.vector);
-        minX[d] = compute_vector_min(N, missing, &Xd_view.vector);//gsl_vector_min(&Xd_view.vector);
+        maxX[d] = compute_vector_max(N, missing, &Xd_view.vector);
+        minX[d] = compute_vector_min(N, missing, &Xd_view.vector);
         meanX[d] = compute_vector_mean(N, missing, &Xd_view.vector);
         varX[d] = compute_vector_var(N, missing, &Xd_view.vector);
         mu[d] = 1;
@@ -1419,7 +1361,6 @@ int initialize_func(int N,
                 s2Y[d] = 2;
                 B[d] = gsl_matrix_calloc(maxK, 1);
                 mu[d] = meanX[d];
-                //w[d]=4/(maxX[d]-mu[d]);
                 if (varX[d] > 0) { w[d] = 1 / sqrt(varX[d]); }
                 else { w[d] = 1; }
                 break;
@@ -1427,7 +1368,6 @@ int initialize_func(int N,
                 s2Y[d] = 2;
                 B[d] = gsl_matrix_calloc(maxK, 1);
                 mu[d] = minX[d] - 1e-6;
-//                 w[d]=4/(maxX[d]-mu[d]);
                 if (varX[d] > 0) { w[d] = 1 / sqrt(varX[d]); }
                 else { w[d] = 1; }
                 break;
@@ -1435,8 +1375,6 @@ int initialize_func(int N,
                 s2Y[d] = 2;
                 B[d] = gsl_matrix_calloc(maxK, 1);
                 mu[d] = minX[d] - 1;
-                //w[d]=1;
-                //w[d]=4/(maxX[d]-mu[d]);
                 if (varX[d] > 0) { w[d] = 1 / sqrt(varX[d]); }
                 else { w[d] = 1; }
                 break;
@@ -1453,6 +1391,7 @@ int initialize_func(int N,
                 theta[d] = gsl_vector_alloc(R[d]);
                 if (R[d] > maxR) { maxR = R[d]; }
                 break;
+                // todo add binary type here
         }
     }
 

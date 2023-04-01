@@ -17,7 +17,7 @@ using namespace std;
  * */
 
 int getArraySize(const string &s, const int s_length) {
-    char * c = new char[s_length + 1];
+    char *c = new char[s_length + 1];
 
     strcpy(c, s.c_str());
     int counter = 0;
@@ -30,6 +30,47 @@ int getArraySize(const string &s, const int s_length) {
 
     delete[] c;
     return counter;
+}
+
+
+void compareEtaRes() {
+    int K = 3, N = 5, n = 0;
+    gsl_matrix *Z = gsl_matrix_calloc(K, N);
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < N; j++) {
+            if (j % 2 == 0) {
+                gsl_matrix_set(Z, i, j, 1.0);
+            } else {
+                gsl_matrix_set(Z, i, j, 0.0);
+            }
+        }
+    }
+
+    gsl_matrix *Rho = gsl_matrix_calloc(N, N);
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            gsl_matrix_set(Rho, i, j, j * 0.1 + 0.1);
+        }
+    }
+    gsl_matrix_view Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
+
+    gsl_matrix * Eta = gsl_matrix_calloc(K * K, 1);
+
+    rank_one_update_eta(Z, &Zn.matrix, Rho, Eta, n, K, N, 1);
+
+    for(int i = 0; i < K * K; i++){
+        cout << gsl_matrix_get(Eta, i, 0) << " , ";
+    }
+
+    cout << endl;
+
+    gsl_matrix * Znon = gsl_matrix_calloc(K, N - 1);
+    remove_col(K, N, n, Znon, Z);
+    normal_update_eta(Znon, Rho, n, Eta);
+
+    for(int i = 0; i < K * K; i++){
+        cout << gsl_matrix_get(Eta, i, 0) << " , ";
+    }
 }
 
 
@@ -66,13 +107,13 @@ int main() {
 
     s = temp.at(0);
     N = getArraySize(s, s.length());
-    int **adjacencyMatrix = new int*[N];
+    int **adjacencyMatrix = new int *[N];
     for (int i = 0; i < N; i++) {
         adjacencyMatrix[i] = new int[N];
     }
 
 
-    char * c = new char[s.length() + 1];
+    char *c = new char[s.length() + 1];
 
     for (int i = 0; i < N; i++) {
         strcpy(c, temp.at(i).c_str());
@@ -98,11 +139,11 @@ int main() {
 
     s = temp.at(0);
     D = getArraySize(s, s.length());
-    auto **attribute = new double*[N];
+    auto **attribute = new double *[N];
     for (int i = 0; i < N; i++) {
         attribute[i] = new double[D];
     }
-    char * c2 = new char[s.length() + 100];
+    char *c2 = new char[s.length() + 100];
 
     for (int i = 0; i < temp.size(); i++) {
         strcpy(c2, temp.at(i).c_str());
@@ -117,20 +158,20 @@ int main() {
 
 
     // ---------------------------------- Create Fin -------------------------------------
-    auto * Fin = new double[D];
+    auto *Fin = new double[D];
     for (int i = 0; i < D; i++) {
         Fin[i] = 1;
     }
 
     // ----------------------------- Get attribute transpose ------------------------------
-    auto * X = new double[D * N];
+    auto *X = new double[D * N];
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < D; j++) {
             X[j * N + i] = attribute[i][j];
         }
     }
 
-    for(int i = 0; i < N; i++){
+    for (int i = 0; i < N; i++) {
         delete[] attribute[i];
     }
     delete[] attribute;
@@ -140,7 +181,7 @@ int main() {
     // fake random generate
     srand(1);
     int random;
-    auto * Z = new double [K * N];
+    auto *Z = new double[K * N];
     for (int i = 0; i < K; i++) {
         for (int j = 0; j < N; j++) {
             random = rand() % 5;
@@ -155,13 +196,13 @@ int main() {
     }
 
     // ---------------------------------- Create Cin --------------------------------------
-    char * Cin = new char[D + 1];
+    char *Cin = new char[D + 1];
     for (int i = 0; i < D; i++) {
-        Cin[i] ='g';
+        Cin[i] = 'g';
     }
     Cin[D] = '\0';
 
-    auto* A = new double[N * N];
+    auto *A = new double[N * N];
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             A[i * N + j] = adjacencyMatrix[i][j];
@@ -174,8 +215,8 @@ int main() {
 
 
     infer(X, Cin, Z, NETin, (double *) A, Fin, N, D, K, F,
-                             bias, s2u, s2B, s2H, alpha, Nsim,
-                             maxK, missing);
+          bias, s2u, s2B, s2H, alpha, Nsim,
+          maxK, missing);
 
     delete[] X;
     delete[] A;
