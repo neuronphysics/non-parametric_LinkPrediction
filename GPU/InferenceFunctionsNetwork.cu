@@ -527,19 +527,16 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         //update Qnon by adding Zn
         Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
         Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
-
         // compute full Q with new Z
         compute_inverse_Q_directly(N, K, &Z_view.matrix, beta, &Qnon_view.matrix);
+        gsl_matrix_memcpy(Q, Qnon);
+
+        // todo, I think we should compute full eta instead of etanon
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
 
-        Znon = gsl_matrix_calloc(K, N - 1);
-        remove_col(K, N, n, Znon, &Z_view.matrix);
+        gsl_Kronecker_product(ZoZ, Z, Z);
+        matrix_multiply(ZoZ, vecRho, &Enon_view.matrix, 1, 0, CblasNoTrans, CblasNoTrans);
 
-        normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
-
-        gsl_matrix_free(Znon);
-
-        gsl_matrix_memcpy(Q, Qnon);
         gsl_matrix_memcpy(eta, etanon);
 
         delete[] p;
@@ -1262,8 +1259,11 @@ int IBPsampler_func(double missing,
 
         for (int i = 0; i < Kest; i++) {
             for (int j = 0; j < Kest; j++) {
-                LOG(OUTPUT_INFO, j == Kest - 1 ? "%3.2f\n" : "%3.2f ", gsl_matrix_get(&H_view.matrix, i, j));
+                if (OUTPUT_LEVEL >= OUTPUT_INFO) {
+                    cout << gsl_matrix_get(&H_view.matrix, i, j) << " , ";
+                }
             }
+            LOG(OUTPUT_INFO, "");
         }
 
         // *****End Sampling Hs
@@ -1277,20 +1277,22 @@ int IBPsampler_func(double missing,
         alpha = SampleAlpha(Kest, N, seed);
 
         LOG(OUTPUT_INFO, "\n");
-        LOG(OUTPUT_INFO, "s2_rho --> %.3f\n", s2Rho);
-        LOG(OUTPUT_INFO, "s2_h   --> %.3f\n", s2H);
-        LOG(OUTPUT_INFO, "alpha  --> %.3f\n", alpha);
+        LOG(OUTPUT_INFO, "s2_rho --> %.3f", s2Rho);
+        LOG(OUTPUT_INFO, "s2_h   --> %.3f", s2H);
+        LOG(OUTPUT_INFO, "alpha  --> %.3f", alpha);
 
 
-        LOG(OUTPUT_INFO, "\n\nB matrix\n");
+        LOG(OUTPUT_INFO, "\n\nB matrix");
         for (int i = 0; i < D; i++) {
             gsl_matrix *Brow = B[i];
             for (int j = 0; j < Kest; j++) {
-                LOG(OUTPUT_INFO, "%.3f, ", gsl_matrix_get(Brow, j, 0));
+                if (OUTPUT_LEVEL >= OUTPUT_INFO) {
+                    cout << gsl_matrix_get(Brow, j, 0) << " , ";
+                }
             }
-            LOG(OUTPUT_INFO, "\n");
+            LOG(OUTPUT_INFO, "");
         }
-        LOG(OUTPUT_INFO, "\n\n");
+        LOG(OUTPUT_INFO, "\n");
 
 
         gsl_matrix_free(vecH);//****
