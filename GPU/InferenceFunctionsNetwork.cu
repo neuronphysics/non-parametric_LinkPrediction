@@ -663,6 +663,27 @@ SampleY(double missing, int N, int d, int K, char Cd, int Rd, double fd, double 
             }
             gsl_matrix_free(muy);
             break;
+
+        case 'b': //binary observations
+            muy = gsl_matrix_alloc(1, 1);
+            for (int n = 0; n < N; n++) {
+                xnd = (int)gsl_matrix_get(X, d, n);
+                Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
+                Bd_view = gsl_matrix_submatrix(Bd, 0, 0, K, 1);
+                matrix_multiply(&Zn.matrix, &Bd_view.matrix, muy, 1, 0, CblasTrans, CblasNoTrans);
+                if (xnd == -1|| gsl_isnan(xnd)) {//missing data
+                    gsl_matrix_set(Yd, 0, n, gsl_matrix_get(muy, 0, 0) + gsl_ran_gaussian(seed, sYd));
+                } else if (xnd == 0) {
+                    gsl_matrix_set(Yd, 0, n, truncnormrnd(gsl_matrix_get(muy, 0, 0), sYd, GSL_NEGINF, 0));
+                } else if (xnd == 1) {
+                    gsl_matrix_set(Yd, 0, n, truncnormrnd(gsl_matrix_get(muy, 0, 0), sYd, 0, GSL_POSINF));
+                } else {
+                    printf("Error! xnd for binary is not 0, 1, -1 (for missing data)\n");
+                }
+            }
+            gsl_matrix_free(muy);
+            break;
+
         case 'o': //ordinal observations
             // Sample Y
             gsl_vector *Ymax = gsl_vector_calloc(Rd);
@@ -1064,6 +1085,24 @@ int IBPsampler_func(double missing,
                 }
                 break;
 
+                // todo add binary here
+            case 'b':
+                Y[d] = gsl_matrix_alloc(1, N);
+                for (int n = 0; n < N; n++) {
+                    xnd = (int)gsl_matrix_get(X, d, n);
+                    if (xnd ==-1|| gsl_isnan(xnd)) {
+                        // it is a missing binary value
+                        gsl_matrix_set(Y[d], 0, n, gsl_ran_gaussian(seed, sqrt(s2Y[d])));
+
+                    } else if (xnd == 0) {
+                        // it just gives it a negative number follows normal distribution with mean 0
+                        gsl_matrix_set(Y[d], 0, n, truncnormrnd(0, sqrt(s2Y[d]), GSL_NEGINF, 0));
+                    } else if (xnd == 1) {
+                        gsl_matrix_set(Y[d], 0, n, truncnormrnd(0, sqrt(s2Y[d]), 0, GSL_POSINF));
+                    }
+                }
+                break;
+
             case 'o':
                 Y[d] = gsl_matrix_alloc(R[d], N);
                 //gsl_vector_set (theta[d], 0, -2*stheta);
@@ -1090,7 +1129,6 @@ int IBPsampler_func(double missing,
                     }
                 }
                 break;
-                // todo add binary here
         }
         // R[d] is always 1
         lambda[d] = gsl_matrix_calloc(maxK, R[d]);
@@ -1394,6 +1432,11 @@ int initialize_func(int N,
                 if (R[d] > maxR) { maxR = R[d]; }
                 break;
                 // todo add binary type here
+            case 'b':
+                s2Y[d] = 1;
+                R[d] = 1;
+                B[d] = gsl_matrix_calloc(maxK, 1);
+                break;
         }
     }
 

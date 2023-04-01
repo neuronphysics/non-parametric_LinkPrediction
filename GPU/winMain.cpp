@@ -98,7 +98,7 @@ int main() {
     string s;
     const char *delim = "\t";
 
-    // todo please enter the correct file location
+    // please enter the correct file location
     adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix_200_4.txt)", ios::in);
     while (getline(adjIn, s)) {
         temp.emplace_back(s);
