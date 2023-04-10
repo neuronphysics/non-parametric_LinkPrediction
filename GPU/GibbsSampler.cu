@@ -3,7 +3,80 @@
 //
 
 #include "GibbsSampler.cuh"
+
 using namespace std;
+
+void sample_znk(int N,
+                int n,
+                int K,
+                int k,
+                int D,
+                int nCount,
+                double s2Rho,
+                double *s2Y,
+                char *C,
+                int *R,
+                double *p,
+                gsl_matrix *Zn,
+                gsl_matrix *Qnon,
+                gsl_matrix *Enon,
+                gsl_matrix *Snon,
+                gsl_matrix *Znon,
+                gsl_matrix *Rho,
+                gsl_matrix *s2y_p,
+                gsl_matrix **Y,
+                gsl_matrix **lambdanon) {
+    if (nCount > 0) {
+        gsl_matrix *aux = gsl_matrix_alloc(1, K);
+        // z_nk=0
+        gsl_matrix_set(Zn, k, 0, 0);
+        matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
+        double lik0 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, Zn, Y, lambdanon);
+        LOG(OUTPUT_DEBUG, "-- lik0=%f\n", lik0);
+        //compute the pseudo-likelihood given Znk=0
+        log_likelihood_Rho(N, K, n, Znon, Zn, Rho, Qnon, Enon, s2Rho, lik0);
+
+        // z_nk=1
+        gsl_matrix_set(Zn, k, 0, 1);
+        matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
+        double lik1 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, Zn, Y, lambdanon);
+        LOG(OUTPUT_DEBUG, "-- lik1=%f\n", lik1);
+        //Pseudo-likelihood for H when z_nk=1 (marginalised)
+        log_likelihood_Rho(N, K, n, Znon, Zn, Rho, Qnon, Enon, s2Rho, lik1);
+
+        LOG(OUTPUT_DEBUG, "lik0=%f , lik1=%f \n", lik0, lik1);
+        double p0 = gsl_sf_log(N - nCount) + lik0;
+        double p1 = gsl_sf_log(nCount) + lik1;
+        double p1_n, p0_n;
+        LOG(OUTPUT_DEBUG, "p1=%f, p0=%f \n", p1, p0);
+
+        if (p0 > p1) {
+            p1_n = expFun(p1 - p0);
+            p0_n = 1;
+        } else {
+            p0_n = expFun(p0 - p1);
+            p1_n = 1;
+        }
+        p1_n = p1_n / (p1_n + p0_n);
+        if (isinf(p1_n) || isnan(p1_n)) {
+            LOG(OUTPUT_NORMAL, "nest[%d]=%d \n", k, nCount);
+            LOG(OUTPUT_NORMAL, "lik0=%f , lik1=%f \n", lik0, lik1);
+            LOG(OUTPUT_NORMAL,
+                "EXECUTION STOPPED: numerical error at the sampler.\n Please restart the sampler and if error persists check hyperparameters. \n");
+            return;
+        }
+        //sampling znk
+        if (drand48() > p1_n) {
+            gsl_matrix_set(Zn, k, 0, 0);
+            p[0] = lik0;
+        } else {
+            p[0] = lik1;
+        }
+        gsl_matrix_free(aux);
+    } else {
+        gsl_matrix_set(Zn, k, 0, 0);
+    }
+}
 
 double compute_likelihood_given_znk(int D,
                                     int K,
@@ -235,64 +308,27 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         middle = end;
 
 
-        // Sampling znk for k=1...K
+        // compute nest array without Zn
         for (int k = bias; k < K; k++) {
             if (gsl_matrix_get(&Zn.matrix, k, 0) == 1) {
                 nest[k]--;
             }
-            if (nest[k] > 0) {
-                aux = gsl_matrix_alloc(1, K);
-                // z_nk=0
-                gsl_matrix_set(&Zn.matrix, k, 0, 0);
-                matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-                double lik0 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, &Zn.matrix, Y, lambdanon);
-                LOG(OUTPUT_DEBUG, "-- lik0=%f\n", lik0);
-                //compute the pseudo-likelihood given Znk=0
-                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, lik0);
+        }
 
-                // z_nk=1
-                gsl_matrix_set(&Zn.matrix, k, 0, 1);
-                matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-                double lik1 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, &Zn.matrix, Y, lambdanon);
-                LOG(OUTPUT_DEBUG, "-- lik1=%f\n", lik1);
-                //Pseudo-likelihood for H when z_nk=1 (marginalised)
-                log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, lik1);
+        // Sampling znk for k=1...K
+        for (int k = bias; k < K; k++) {
+            sample_znk(N, n, K, k, D, nest[k], s2Rho, s2Y, C, R, p, &Zn.matrix, &Qnon_view.matrix, &Enon_view.matrix,
+                       Snon, Znon, Rho, s2y_p, Y, lambdanon);
+        }
 
-                LOG(OUTPUT_DEBUG, "lik0=%f , lik1=%f \n", lik0, lik1);
-                double p0 = gsl_sf_log(N - nest[k]) + lik0;
-                double p1 = gsl_sf_log(nest[k]) + lik1;
-                double p1_n, p0_n;
-                LOG(OUTPUT_DEBUG, "p1=%f, p0=%f \n", p1, p0);
-
-                if (p0 > p1) {
-                    p1_n = expFun(p1 - p0);
-                    p0_n = 1;
-                } else {
-                    p0_n = expFun(p0 - p1);
-                    p1_n = 1;
-                }
-                p1_n = p1_n / (p1_n + p0_n);
-                if (isinf(p1_n) || isnan(p1_n)) {
-                    LOG(OUTPUT_NORMAL, "nest[%d]=%d \n", k, nest[k]);
-                    LOG(OUTPUT_NORMAL, "lik0=%f , lik1=%f \n", lik0, lik1);
-                    LOG(OUTPUT_NORMAL,
-                        "EXECUTION STOPPED: numerical error at the sampler.\n Please restart the sampler and if error persists check hyperparameters. \n");
-                    return 0;
-                }
-                //sampling znk
-                if (drand48() > p1_n) {
-                    gsl_matrix_set(&Zn.matrix, k, 0, 0);
-                    p[0] = lik0;
-                } else {
-                    nest[k] += 1;
-                    p[0] = lik1;
-                }
-                gsl_matrix_free(aux);
-            } else {
-                gsl_matrix_set(&Zn.matrix, k, 0, 0);
+        // based on new Zn, update nest
+        for (int k = bias; k < K; k++) {
+            if (gsl_matrix_get(&Zn.matrix, k, 0) == 1) {
+                nest[k]++;
             }
         }
 
+        // todo verify nest count
 
         end = chrono::steady_clock::now();
         LOG(OUTPUT_INFO, "Sample all K cost = %lld [ms]",
@@ -395,6 +431,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         gsl_matrix_set_zero(&Znew.matrix);
 
         if (K + TK < maxK) {
+            // only need p[0] from the last k
             double pmax = p[0];
             double kk = 0;
             // since TK is fixed to 2, thus this for loop will only run once
