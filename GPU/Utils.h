@@ -39,8 +39,6 @@ double f_1(double x, double func, double mu, double w);
 double f_w(double x, double func, double mu, double w);
 
 double fint_1(double x, double w, double theta_L, double theta_H);
-// double f(double x, double w);
-
 
 // General functions
 double compute_vector_mean(int N, double missing, gsl_vector *v);
@@ -84,7 +82,6 @@ void mvnrnd(gsl_vector *X, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_r
 
 double truncnormrnd(double mu, double sigma, double xlo, double xhi);
 
-//****New for Network analysis
 int gsl_Kronecker_product(gsl_matrix *prod, gsl_matrix * a, gsl_matrix *b);
 
 int gsl_matrix2vector(gsl_matrix *vect, gsl_matrix *matrix);
@@ -94,6 +91,7 @@ int gsl_vector2matrix(gsl_matrix *vect, gsl_matrix *matrix);
 double gsl_trace(gsl_matrix *A);
 
 int remove_col(int K, int N, int i, gsl_matrix *Sn, gsl_matrix *Z);//remove a row from matrix Z
+
 double recursive_inverse(int K, gsl_matrix *X, gsl_matrix *E, gsl_matrix *F, int add);
 
 int
@@ -116,4 +114,6 @@ int inverse_matrix_Q(double alpha, gsl_matrix *Z, gsl_matrix *X, int N, int K, d
 void compute_inverse_Q_directly(int N, int K, gsl_matrix *Z, double beta, gsl_matrix *Q);
 
 void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * Enon);
+
+void print_Zn(gsl_matrix * Zn, int K);
 #endif

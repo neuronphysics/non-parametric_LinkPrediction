@@ -2,9 +2,103 @@
 // Created by su999 on 2023/4/10.
 //
 
+#include <thread>
 #include "GibbsSampler.cuh"
 
 using namespace std;
+
+void
+generate_zn_combination(int count, int startK, unordered_map<string, gsl_matrix *> *records, const string &combination,
+                        gsl_matrix *ZnOrigin) {
+    if (count == 0) {
+        // read combination and create corresponding Zn copy
+        gsl_matrix *ZnCopy = gsl_matrix_calloc(ZnOrigin->size1, ZnOrigin->size2);
+        gsl_matrix_memcpy(ZnCopy, ZnOrigin);
+
+        int pos = 0;
+        for (char c: combination) {
+            if (c == '0') {
+                gsl_matrix_set(ZnCopy, startK + pos, 0, 0);
+            } else {
+                gsl_matrix_set(ZnCopy, startK + pos, 0, 1);
+            }
+            pos++;
+        }
+        records->insert(pair<string, gsl_matrix *>(combination, ZnCopy));
+        return;
+    }
+
+    generate_zn_combination(count - 1, startK, records, combination + "0", ZnOrigin);
+    generate_zn_combination(count - 1, startK, records, combination + "1", ZnOrigin);
+}
+
+
+int parallel_sample_znk(int N,
+                        int n,
+                        int K,
+                        int startK,
+                        int D,
+                        int *nest,
+                        double s2Rho,
+                        double *s2Y,
+                        char *C,
+                        int *R,
+                        double *p,
+                        gsl_matrix *Zn,
+                        gsl_matrix *Qnon,
+                        gsl_matrix *Enon,
+                        gsl_matrix *Snon,
+                        gsl_matrix *Znon,
+                        gsl_matrix *Rho,
+                        gsl_matrix *s2y_p,
+                        gsl_matrix **Y,
+                        gsl_matrix **lambdanon) {
+
+    unordered_map<string, gsl_matrix *> records;
+
+    for (int i = 0; i < 4 && startK + i < K - 1; i++) {
+        generate_zn_combination(i, startK, &records, "", Zn);
+    }
+
+    // start all sampling thread
+    auto **threads = new thread *[records.size()];
+    int pos = 0;
+    for (auto &v: records) {
+        int currentK = startK + v.first.size();
+        auto *temp = new thread(sample_znk, N, n, K, currentK, D, nest[currentK], s2Rho, s2Y, C, R, p, v.second, Qnon, Enon,
+                                Snon, Znon, Rho, s2y_p, Y, lambdanon);
+        threads[pos] = temp;
+        pos++;
+    }
+
+    // wait for all threads to finish
+    for(int i = 0; i < records.size(); i++){
+        threads[i]->join();
+        delete threads[i];
+    }
+    delete[] threads;
+
+    // start to determine real Znk
+    string realRes;
+    for (int i = 0; i < 4 && startK + i < K - 1; i++) {
+        gsl_matrix * ZnRes = records[realRes];
+        double res = gsl_matrix_get(ZnRes, startK + i, 0);
+
+        cout << "Zn" << startK + i << " = " << res << endl;
+        // update the data to original Zn
+        gsl_matrix_set(Zn, startK + i, 0, res);
+        res == 0 ? realRes += "0" : realRes += "1";
+    }
+
+    // free all the Zn copy
+    for (auto &v: records) {
+        gsl_matrix_free(v.second);
+    }
+
+    // return next unsampled index
+    return startK + 4 < K - 1 ? startK + 4 : K - 1;
+}
+
 
 void sample_znk(int N,
                 int n,
@@ -316,10 +410,22 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         }
 
         // Sampling znk for k=1...K
-        for (int k = bias; k < K; k++) {
-            sample_znk(N, n, K, k, D, nest[k], s2Rho, s2Y, C, R, p, &Zn.matrix, &Qnon_view.matrix, &Enon_view.matrix,
-                       Snon, Znon, Rho, s2y_p, Y, lambdanon);
+        int nextUnsampled = bias;
+        while (nextUnsampled < K - 1) {
+            cout << "batch sample start with ";
+            print_Zn(&Zn.matrix, K);
+            nextUnsampled = parallel_sample_znk(N, n, K, nextUnsampled, D, nest, s2Rho, s2Y, C, R, p, &Zn.matrix,
+                                                &Qnon_view.matrix, &Enon_view.matrix,
+                                                Snon, Znon, Rho, s2y_p, Y, lambdanon);
+            cout << "batch sample complete\n\n";
         }
+        // sample last k
+        sample_znk(N, n, K, K - 1, D, nest[K - 1], s2Rho, s2Y, C, R, p, &Zn.matrix, &Qnon_view.matrix,
+                   &Enon_view.matrix,
+                   Snon, Znon, Rho, s2y_p, Y, lambdanon);
+
+        cout << "final Zn is ";
+        print_Zn(&Zn.matrix, K);
 
         // based on new Zn, update nest
         for (int k = bias; k < K; k++) {

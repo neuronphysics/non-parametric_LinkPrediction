@@ -79,7 +79,7 @@ int main() {
     int N;
     int D;
     // k need to be larger than 1
-    int K = 2;
+    int K = 10;
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise

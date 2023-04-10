@@ -6,6 +6,28 @@
 #define GLFM_CUDA_ACC_GIBBSSAMPLER_CUH
 
 #include "Utils.h"
+#include "unordered_map"
+
+void sample_znk(int N,
+                int n,
+                int K,
+                int k,
+                int D,
+                int nCount,
+                double s2Rho,
+                double *s2Y,
+                char *C,
+                int *R,
+                double *p,
+                gsl_matrix *Zn,
+                gsl_matrix *Qnon,
+                gsl_matrix *Enon,
+                gsl_matrix *Snon,
+                gsl_matrix *Znon,
+                gsl_matrix *Rho,
+                gsl_matrix *s2y_p,
+                gsl_matrix **Y,
+                gsl_matrix **lambdanon);
 
 double
 compute_likelihood_given_znk(int D, int K, int n, double *s2Y, char *C, int *R, gsl_matrix *s2y_p, gsl_matrix *aux,

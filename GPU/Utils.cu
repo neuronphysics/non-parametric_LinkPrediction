@@ -738,3 +738,10 @@ void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * E
     gsl_matrix_free(rhocy);
     gsl_matrix_free(vecRho_n_n);
 }
+
+void print_Zn(gsl_matrix * Zn, int K){
+    for(int i = 0; i < K; i++){
+        cout << gsl_matrix_get(Zn, i, 0) << ", ";
+    }
+    cout << "\n";
+}
