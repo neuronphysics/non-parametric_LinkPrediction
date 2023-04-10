@@ -15,32 +15,31 @@ void sample_znk(int N,
                 int D,
                 int nCount,
                 double s2Rho,
-                double *s2Y,
-                char *C,
-                int *R,
+                const double *s2Y,
+                const char *C,
+                const int *R,
                 double *p,
                 gsl_matrix *Zn,
                 gsl_matrix *Qnon,
-                gsl_matrix *Enon,
-                gsl_matrix *Snon,
-                gsl_matrix *Znon,
-                gsl_matrix *Rho,
-                gsl_matrix *s2y_p,
+                const gsl_matrix *Enon,
+                const gsl_matrix *Snon,
+                const gsl_matrix *Znon,
+                const gsl_matrix *Rho,
                 gsl_matrix **Y,
                 gsl_matrix **lambdanon);
 
 double
-compute_likelihood_given_znk(int D, int K, int n, double *s2Y, char *C, int *R, gsl_matrix *s2y_p, gsl_matrix *aux,
-                             gsl_matrix *Zn, gsl_matrix **Y, gsl_matrix **lambdanon);
+init_likelihood_given_znk(int D, int K, int n, const double *s2Y, const char *C, const int *R, const gsl_matrix *aux,
+                             const gsl_matrix *Zn, gsl_matrix **Y, gsl_matrix **lambdanon);
 
 int log_likelihood_Rho(int N,
                        int K,
                        int r,
-                       gsl_matrix *Znon,// Z_{-n} N-1 x K matrix
-                       gsl_matrix *zn,
-                       gsl_matrix *Rho,
+                       const gsl_matrix *Znon,// Z_{-n} N-1 x K matrix
+                       const gsl_matrix *zn,
+                       const gsl_matrix *Rho,
                        gsl_matrix *Qnon,
-                       gsl_matrix *Eta,// Snon^T vec(Rho -n, -n)
+                       const gsl_matrix *Eta,// Snon^T vec(Rho -n, -n)
                        double s2Rho,
                        double &lik);
 

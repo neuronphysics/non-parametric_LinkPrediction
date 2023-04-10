@@ -131,7 +131,7 @@ int factorial(int N) {
     return fact;
 }
 
-void matrix_multiply(gsl_matrix *A, gsl_matrix *B, gsl_matrix *C, double alpha, double beta, CBLAS_TRANSPOSE_t TransA,
+void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double alpha, double beta, CBLAS_TRANSPOSE_t TransA,
                      CBLAS_TRANSPOSE_t TransB) {
     // C = alpha * AB + beta * C
     gpuMatrixMultiply(A, B, C, alpha, beta, TransA, TransB);
@@ -323,8 +323,8 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
 
 // Extra utilities for the Link Prediction paper (author: Zahra)
 int gsl_Kronecker_product(gsl_matrix *prod,
-                          gsl_matrix *a,
-                          gsl_matrix *b) {
+                          const gsl_matrix *a,
+                          const gsl_matrix *b) {
     //https://github.com/SDerrode/PLGM2/blob/4eeeb34d3f957e03091b0cafcae5b22e734adade/tkalman_c/PKF/gsl/source/gsl_Kronecker_product.cpp
     if (prod->size1 != a->size1 * b->size1 || prod->size2 != a->size2 * b->size2) { return 1; }
     for (unsigned int i = 0; i < a->size1; ++i) {

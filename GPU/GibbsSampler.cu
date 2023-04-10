@@ -38,23 +38,23 @@ int parallel_sample_znk(int N,
                         int K,
                         int startK,
                         int D,
-                        int *nest,
+                        const int *nest,
                         double s2Rho,
-                        double *s2Y,
-                        char *C,
-                        int *R,
-                        double *p,
+                        const double *s2Y,
+                        const char *C,
+                        const int *R,
                         gsl_matrix *Zn,
-                        gsl_matrix *Qnon,
-                        gsl_matrix *Enon,
-                        gsl_matrix *Snon,
-                        gsl_matrix *Znon,
-                        gsl_matrix *Rho,
-                        gsl_matrix *s2y_p,
-                        gsl_matrix **Y,
-                        gsl_matrix **lambdanon) {
+                        gsl_matrix *Qnon,       // read only
+                        const gsl_matrix *Enon,
+                        const gsl_matrix *Snon,
+                        const gsl_matrix *Znon,
+                        const gsl_matrix *Rho,
+                        gsl_matrix **Y,         // read only
+                        gsl_matrix **lambdanon  // read only
+                        ) {
 
     unordered_map<string, gsl_matrix *> records;
+    double p[2];
 
     for (int i = 0; i < 4 && startK + i < K - 1; i++) {
         generate_zn_combination(i, startK, &records, "", Zn);
@@ -65,14 +65,15 @@ int parallel_sample_znk(int N,
     int pos = 0;
     for (auto &v: records) {
         int currentK = startK + v.first.size();
-        auto *temp = new thread(sample_znk, N, n, K, currentK, D, nest[currentK], s2Rho, s2Y, C, R, p, v.second, Qnon, Enon,
-                                Snon, Znon, Rho, s2y_p, Y, lambdanon);
+        auto *temp = new thread(sample_znk, N, n, K, currentK, D, nest[currentK], s2Rho, s2Y, C, R, p, v.second, Qnon,
+                                Enon,
+                                Snon, Znon, Rho, Y, lambdanon);
         threads[pos] = temp;
         pos++;
     }
 
     // wait for all threads to finish
-    for(int i = 0; i < records.size(); i++){
+    for (int i = 0; i < records.size(); i++) {
         threads[i]->join();
         delete threads[i];
     }
@@ -81,10 +82,9 @@ int parallel_sample_znk(int N,
     // start to determine real Znk
     string realRes;
     for (int i = 0; i < 4 && startK + i < K - 1; i++) {
-        gsl_matrix * ZnRes = records[realRes];
+        gsl_matrix *ZnRes = records[realRes];
         double res = gsl_matrix_get(ZnRes, startK + i, 0);
 
-        cout << "Zn" << startK + i << " = " << res << endl;
         // update the data to original Zn
         gsl_matrix_set(Zn, startK + i, 0, res);
         res == 0 ? realRes += "0" : realRes += "1";
@@ -107,25 +107,25 @@ void sample_znk(int N,
                 int D,
                 int nCount,
                 double s2Rho,
-                double *s2Y,
-                char *C,
-                int *R,
+                const double *s2Y,
+                const char *C,
+                const int *R,
                 double *p,
                 gsl_matrix *Zn,
-                gsl_matrix *Qnon,
-                gsl_matrix *Enon,
-                gsl_matrix *Snon,
-                gsl_matrix *Znon,
-                gsl_matrix *Rho,
-                gsl_matrix *s2y_p,
-                gsl_matrix **Y,
-                gsl_matrix **lambdanon) {
+                gsl_matrix *Qnon,       // read only
+                const gsl_matrix *Enon,
+                const gsl_matrix *Snon,
+                const gsl_matrix *Znon,
+                const gsl_matrix *Rho,
+                gsl_matrix **Y,         // read only
+                gsl_matrix **lambdanon  // read only
+                ) {
     if (nCount > 0) {
         gsl_matrix *aux = gsl_matrix_alloc(1, K);
         // z_nk=0
         gsl_matrix_set(Zn, k, 0, 0);
         matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-        double lik0 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, Zn, Y, lambdanon);
+        double lik0 = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, Zn, Y, lambdanon);
         LOG(OUTPUT_DEBUG, "-- lik0=%f\n", lik0);
         //compute the pseudo-likelihood given Znk=0
         log_likelihood_Rho(N, K, n, Znon, Zn, Rho, Qnon, Enon, s2Rho, lik0);
@@ -133,7 +133,7 @@ void sample_znk(int N,
         // z_nk=1
         gsl_matrix_set(Zn, k, 0, 1);
         matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-        double lik1 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, Zn, Y, lambdanon);
+        double lik1 = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, Zn, Y, lambdanon);
         LOG(OUTPUT_DEBUG, "-- lik1=%f\n", lik1);
         //Pseudo-likelihood for H when z_nk=1 (marginalised)
         log_likelihood_Rho(N, K, n, Znon, Zn, Rho, Qnon, Enon, s2Rho, lik1);
@@ -172,55 +172,70 @@ void sample_znk(int N,
     }
 }
 
-double compute_likelihood_given_znk(int D,
+double init_likelihood_given_znk(int D,
                                     int K,
                                     int n,
-                                    double *s2Y,
-                                    char *C,
-                                    int *R,
-                                    gsl_matrix *s2y_p,
-                                    gsl_matrix *aux,
-                                    gsl_matrix *Zn,
-                                    gsl_matrix **Y,
-                                    gsl_matrix **lambdanon) {
+                                    const double *s2Y,
+                                    const char *C,
+                                    const int *R,
+                                    const gsl_matrix *aux,
+                                    const gsl_matrix *Zn,
+                                    gsl_matrix **Y,         // read only
+                                    gsl_matrix **lambdanon  // read only
+                                    ) {
     double likelihood = 0;
-    for (int d = 0; d < D; d++) {
-        gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
-        matrix_multiply(aux, Zn, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
+    gsl_matrix *s2y_p = gsl_matrix_calloc(1, 1);
+    for (
+            int d = 0;
+            d < D;
+            d++) {
+        gsl_matrix_set(s2y_p,
+                       0, 0, s2Y[d]);
+        matrix_multiply(aux, Zn, s2y_p,
+                        1, 1, CblasNoTrans, CblasNoTrans);
         double s2y_num = gsl_matrix_get(s2y_p, 0, 0);
-        gsl_matrix_view Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
-        gsl_matrix_view Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
+        const gsl_matrix_view Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
+        const gsl_matrix_view Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
         gsl_matrix *muy = gsl_matrix_alloc(1, R[d]);
-        matrix_multiply(aux, &Lnon_view.matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
+        matrix_multiply(aux, &Lnon_view
+                .matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
         if (C[d] == 'c') {
-            for (int r = 0; r < R[d] - 1; r++) {
-                likelihood -= 0.5 / s2y_num *
-                              pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2) +
+            for (
+                    int r = 0;
+                    r < R[d] - 1; r++) {
+                likelihood -= 0.5 /
+                              s2y_num *
+                              pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2)
+                              +
                               0.5 * gsl_sf_log(2 * M_PI * s2y_num);
             }
         } else {
-            likelihood -= 0.5 / s2y_num *
-                          pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2) +
+            likelihood -= 0.5 /
+                          s2y_num *
+                          pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2)
+                          +
                           0.5 * gsl_sf_log(2 * M_PI * s2y_num);
         }
         gsl_matrix_free(muy);
     }
-    return likelihood;
+    gsl_matrix_free(s2y_p);
+    return
+            likelihood;
 }
 
 
 int log_likelihood_Rho(int N,
                        int K,
                        int r,
-                       gsl_matrix *Znon,// Z_{-n} N-1 x K matrix
-                       gsl_matrix *zn,
-                       gsl_matrix *Rho,
-                       gsl_matrix *Qnon,
-                       gsl_matrix *Eta,// Snon^T vec(Rho -n, -n)
+                       const gsl_matrix *Znon, // read only
+                       const gsl_matrix *zn,   // read only
+                       const gsl_matrix *Rho,  // read only
+                       gsl_matrix *Qnon,       // read only
+                       const gsl_matrix *Eta,  // read only
                        double s2Rho,
                        double &lik) {
     gsl_matrix *mu = gsl_matrix_calloc(N - 1, 1);// (Z_{-n} Kronecker_Product Zn ) Qnon . Snon. vec(Rho_n)
-    gsl_matrix_view Q_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
+    const gsl_matrix_view Q_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
     gsl_matrix *SQnon = gsl_matrix_calloc(N - 1, K * K);//(Znon Kron Zn)(Snon^T Snon+beta I)^{-1}
     gsl_matrix *S = gsl_matrix_calloc(K * K, N - 1);//S=(Z_{-n} Kronecker_Product Zn )
 
@@ -230,7 +245,6 @@ int log_likelihood_Rho(int N,
     matrix_multiply(S, &Q_view.matrix, SQnon, 1, 0, CblasTrans, CblasNoTrans);
 
     //compute the covariance
-    //gsl_matrix *invSigma   = inverse_sigma_rho(Znon, zn, &Q_view.matrix, S, r, K, N, s2Rho);
     gsl_matrix *invSigma = gsl_matrix_calloc(N - 1, N - 1);
     gsl_matrix_set_identity(invSigma);
 
@@ -318,7 +332,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
     gsl_matrix_view Ydn;
     gsl_matrix_view Z_view;
     gsl_matrix *muy;//muy=Zn * muB ===> muB=P^{-1}*lambda
-    gsl_matrix *s2y_p = gsl_matrix_alloc(1, 1);
     gsl_matrix *aux;//aux=Zn^T_{1xK}*P^{-1}_{KxK}
     gsl_matrix *Snon;//Snon= P^{-1}
     double beta = s2Rho / s2H;
@@ -412,20 +425,15 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         // Sampling znk for k=1...K
         int nextUnsampled = bias;
         while (nextUnsampled < K - 1) {
-            cout << "batch sample start with ";
-            print_Zn(&Zn.matrix, K);
-            nextUnsampled = parallel_sample_znk(N, n, K, nextUnsampled, D, nest, s2Rho, s2Y, C, R, p, &Zn.matrix,
+            nextUnsampled = parallel_sample_znk(N, n, K, nextUnsampled, D, nest, s2Rho, s2Y, C, R, &Zn.matrix,
                                                 &Qnon_view.matrix, &Enon_view.matrix,
-                                                Snon, Znon, Rho, s2y_p, Y, lambdanon);
-            cout << "batch sample complete\n\n";
+                                                Snon, Znon, Rho, Y, lambdanon);
         }
         // sample last k
         sample_znk(N, n, K, K - 1, D, nest[K - 1], s2Rho, s2Y, C, R, p, &Zn.matrix, &Qnon_view.matrix,
                    &Enon_view.matrix,
-                   Snon, Znon, Rho, s2y_p, Y, lambdanon);
+                   Snon, Znon, Rho, Y, lambdanon);
 
-        cout << "final Zn is ";
-        print_Zn(&Zn.matrix, K);
 
         // based on new Zn, update nest
         for (int k = bias; k < K; k++) {
@@ -558,7 +566,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 gsl_matrix_set(&Zn.matrix, K + j - 1, 0, 1);
                 matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
 
-                double lik = compute_likelihood_given_znk(D, K + j, n, s2Y, C, R, s2y_p, aux, &Zn.matrix, Y, lambdanon);
+                double lik = init_likelihood_given_znk(D, K + j, n, s2Y, C, R, aux, &Zn.matrix, Y, lambdanon);
 
                 Iden = gsl_matrix_calloc(K, K);
                 gsl_matrix_set_identity(Iden);
@@ -681,7 +689,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         LOG(OUTPUT_INFO, "Total cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count());
     }
 
-    gsl_matrix_free(s2y_p);
     gsl_matrix_free(ZoZ);
 
     return K;

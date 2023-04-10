@@ -232,7 +232,7 @@ void multiplyAndPlus(int CRows, int ACols, int BCols, double scale1, double scal
 }
 
 
-void parseGslMatrix(double *in, gsl_matrix *original, CBLAS_TRANSPOSE_t trans) {
+void parseGslMatrix(double *in, const gsl_matrix *original, CBLAS_TRANSPOSE_t trans) {
     if (trans == CBLAS_TRANSPOSE::CblasNoTrans) {
         for (int i = 0; i < original->size1; i++) {
             for (int j = 0; j < original->size2; j++) {
@@ -250,7 +250,7 @@ void parseGslMatrix(double *in, gsl_matrix *original, CBLAS_TRANSPOSE_t trans) {
 
 
 void
-gpuMatrixMultiply(gsl_matrix *A, gsl_matrix *B, gsl_matrix *C, double scale1, double scale2, CBLAS_TRANSPOSE_t transA,
+gpuMatrixMultiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double scale1, double scale2, CBLAS_TRANSPOSE_t transA,
                   CBLAS_TRANSPOSE_t transB) {
     auto *inputA = new double[A->size1 * A->size2];
     auto *inputB = new double[B->size1 * B->size2];
