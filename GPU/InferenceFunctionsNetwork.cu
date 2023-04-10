@@ -196,19 +196,17 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         chrono::steady_clock::time_point middle = chrono::steady_clock::now();
         chrono::steady_clock::time_point end;
 
+        Pnon_view = gsl_matrix_submatrix(Pnon, 0, 0, K, K);
+        // Pnon_view=P - Zn*Zn
+        matrix_multiply(&Zn.matrix, &Zn.matrix, &Pnon_view.matrix, -1, 1, CblasNoTrans, CblasTrans);
 
-        // Pnon, LambdaNon
         //The upper-left element of the submatrix is the element (0,n) of the original matrix. The submatrix has K rows and one column.  Zn_{Kx1}
         Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
-        // Pnon_view=Pnon_{KxK}
-        Pnon_view = gsl_matrix_submatrix(Pnon, 0, 0, K, K);
         // Sigma_B   This function allocates memory for a matrix of length n and initializes all the elements of the matrix to zero.
         Snon = gsl_matrix_calloc(K, K);
         gsl_matrix_memcpy(Snon, &Pnon_view.matrix);
         // Snon=Pnon_view^{-1}
         inverse(Snon, K);
-        // Pnon_view=-1*Zn*Zn+1*Pnon_view
-        matrix_multiply(&Zn.matrix, &Zn.matrix, &Pnon_view.matrix, -1, 1, CblasNoTrans, CblasTrans);
 
         for (int d = 0; d < D; d++) {
             Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
@@ -270,7 +268,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 matrix_multiply(&Zn.matrix, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
                 double lik1 = compute_likelihood_given_znk(D, K, n, s2Y, C, R, s2y_p, aux, &Zn.matrix, Y, lambdanon);
                 LOG(OUTPUT_DEBUG, "-- lik1=%f\n", lik1);
-                //Pseudo-likelihhod for H when z_nk=1 (marginalised)
+                //Pseudo-likelihood for H when z_nk=1 (marginalised)
                 log_likelihood_Rho(N, K, n, Znon, &Zn.matrix, Rho, &Qnon_view.matrix, &Enon_view.matrix, s2Rho, lik1);
 
                 LOG(OUTPUT_DEBUG, "lik0=%f , lik1=%f \n", lik0, lik1);
@@ -505,7 +503,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         Pnon_view = gsl_matrix_submatrix(Pnon, 0, 0, K, K);
         matrix_multiply(&Zn.matrix, &Zn.matrix, &Pnon_view.matrix, 1, 1, CblasNoTrans, CblasTrans);
 
-        // todo maybe we should move this part outside the for loop, it does not make sense
         gsl_matrix_memcpy(P, Pnon);
 
         for (int d = 0; d < D; d++) {
@@ -531,7 +528,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         compute_inverse_Q_directly(N, K, &Z_view.matrix, beta, &Qnon_view.matrix);
         gsl_matrix_memcpy(Q, Qnon);
 
-        // todo, I think we should compute full eta instead of etanon
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
 
         gsl_Kronecker_product(ZoZ, Z, Z);
@@ -563,7 +559,6 @@ void
 SampleY(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2Y, double s2u,
         double s2theta, gsl_matrix *X, gsl_matrix *Z, gsl_matrix *Yd, gsl_matrix *Bd, gsl_vector *thetad,
         const gsl_rng *seed) {
-    //double su= sqrt(s2u);
     double sYd = sqrt(s2Y);
     double stheta = sqrt(s2theta);
     gsl_matrix_view Zn;
@@ -801,17 +796,15 @@ void SampleRho(double missing,
         //binary values
         for (int m = 0; m < N; m++) {
             Zm = gsl_matrix_submatrix(Z, 0, m, K, 1);
-            //
             for (int n = 0; n < m; n++) {
-                //
                 mu_rho = gsl_matrix_calloc(1, 1);
                 Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
                 gsl_matrix_transpose_memcpy(ZnT, &Zn.matrix);
                 gsl_matrix_transpose_memcpy(ZmT, &Zm.matrix);
                 gsl_Kronecker_product(aux, ZnT, ZmT);
                 matrix_multiply(aux, vecH, mu_rho, 1, 0, CblasNoTrans, CblasNoTrans);
-                //
-                a_nm = (int) gsl_matrix_get(A, m, n);//??? are the indices right??
+
+                a_nm = (int) gsl_matrix_get(A, m, n);
                 if (gsl_isnan(a_nm || a_nm == missing)) {
                     gsl_matrix_set(vecRho, m * N + n, 0, gsl_matrix_get(mu_rho, 0, 0) + gsl_ran_gaussian(seed, sRho));
                 } else if (a_nm == 0) {
@@ -824,6 +817,7 @@ void SampleRho(double missing,
                                    truncnormrnd(gsl_matrix_get(mu_rho, 0, 0), sRho, 0, GSL_POSINF));
                 }
                 gsl_matrix_set(vecRho, n * N + m, 0, gsl_matrix_get(vecRho, m * N + n, 0));
+
                 //print the problematic part of the code
                 if (isinf(gsl_matrix_get(vecRho, m * N + n, 0))) {
                     LOG(OUTPUT_DEBUG, "mu: %3.2f\n", gsl_matrix_get(mu_rho, 0, 0));
