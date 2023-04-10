@@ -66,8 +66,7 @@ int parallel_sample_znk(int N,
     for (auto &v: records) {
         int currentK = startK + v.first.size();
         auto *temp = new thread(sample_znk, N, n, K, currentK, D, nest[currentK], s2Rho, s2Y, C, R, p, v.second, Qnon,
-                                Enon,
-                                Snon, Znon, Rho, Y, lambdanon);
+                                Enon, Snon, Znon, Rho, Y, lambdanon);
         threads[pos] = temp;
         pos++;
     }
@@ -99,24 +98,25 @@ int parallel_sample_znk(int N,
     return startK + 4 < K - 1 ? startK + 4 : K - 1;
 }
 
-double compute_pseudo_likelihood_given_znk(int D,
-                                           int K,
-                                           int k,
-                                           int N,
-                                           int n,
-                                           int given,
-                                           double s2Rho,
-                                           const double *s2Y,
-                                           const char *C,
-                                           const int *R,
-                                           const gsl_matrix *Zn,
-                                           const gsl_matrix *Enon,
-                                           const gsl_matrix *Snon,
-                                           const gsl_matrix *Znon,
-                                           const gsl_matrix *Rho,
-                                           gsl_matrix *Qnon,       // read only
-                                           gsl_matrix **Y,         // read only
-                                           gsl_matrix **lambdanon  // read only
+void compute_pseudo_likelihood_given_znk(int D,
+                                         int K,
+                                         int k,
+                                         int N,
+                                         int n,
+                                         int given,
+                                         double s2Rho,
+                                         const double *s2Y,
+                                         const char *C,
+                                         const int *R,
+                                         const gsl_matrix *Zn,
+                                         const gsl_matrix *Enon,
+                                         const gsl_matrix *Snon,
+                                         const gsl_matrix *Znon,
+                                         const gsl_matrix *Rho,
+                                         gsl_matrix *Qnon,       // read only
+                                         gsl_matrix **Y,         // read only
+                                         gsl_matrix **lambdanon,  // read only
+                                         double *like
 ) {
     gsl_matrix *ZnCopy = gsl_matrix_calloc(Zn->size1, Zn->size2);
     gsl_matrix_memcpy(ZnCopy, Zn);
@@ -124,13 +124,12 @@ double compute_pseudo_likelihood_given_znk(int D,
 
     gsl_matrix_set(ZnCopy, k, 0, given);
     matrix_multiply(ZnCopy, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-    double lik = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, ZnCopy, Y, lambdanon);
-    LOG(OUTPUT_DEBUG, "-- lik%d=%f\n", given, lik);
-    log_likelihood_Rho(N, K, n, Znon, ZnCopy, Rho, Qnon, Enon, s2Rho, lik);
+    *like = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, ZnCopy, Y, lambdanon);
+    LOG(OUTPUT_DEBUG, "-- like%d=%f\n", given, *like);
+    log_likelihood_Rho(N, K, n, Znon, ZnCopy, Rho, Qnon, Enon, s2Rho, *like);
 
     gsl_matrix_free(ZnCopy);
     gsl_matrix_free(aux);
-    return lik;
 }
 
 void sample_znk(int N,
@@ -154,13 +153,17 @@ void sample_znk(int N,
                 gsl_matrix **lambdanon  // read only
 ) {
     if (nCount > 0) {
+        double lik0 = 0, lik1 = 0;
         // given Znk = 0
-        double lik0 = compute_pseudo_likelihood_given_znk(D, K, k, N, n, 0, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
-                                                          Qnon, Y, lambdanon);
+        thread t0(compute_pseudo_likelihood_given_znk, D, K, k, N, n, 0, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
+                 Qnon, Y, lambdanon, &lik0);
 
         // given Znk = 1
-        double lik1 = compute_pseudo_likelihood_given_znk(D, K, k, N, n, 1, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
-                                                          Qnon, Y, lambdanon);
+        thread t1(compute_pseudo_likelihood_given_znk, D, K, k, N, n, 1, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
+                                            Qnon, Y, lambdanon, &lik1);
+
+        t0.join();
+        t1.join();
 
         LOG(OUTPUT_DEBUG, "lik0=%f , lik1=%f", lik0, lik1);
         double p0 = gsl_sf_log(N - nCount) + lik0;

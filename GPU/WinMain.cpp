@@ -79,7 +79,7 @@ int main() {
     int N;
     int D;
     // k need to be larger than 1
-    int K = 10;
+    int K = 7;
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise
@@ -99,7 +99,7 @@ int main() {
     const char *delim = "\t";
 
     // please enter the correct file location
-    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix_200_4.txt)", ios::in);
+    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix.txt)", ios::in);
     while (getline(adjIn, s)) {
         temp.emplace_back(s);
     }
@@ -130,7 +130,7 @@ int main() {
     temp.clear();
     s = "";
     // todo please enter the correct file location
-    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix_200_4.txt)", ios::in);
+    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix.txt)", ios::in);
     while (getline(attributeIn, s)) {
         temp.emplace_back(s);
     }

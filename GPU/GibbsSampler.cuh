@@ -29,8 +29,37 @@ void sample_znk(int N,
                 gsl_matrix **lambdanon);
 
 double
-init_likelihood_given_znk(int D, int K, int n, const double *s2Y, const char *C, const int *R, const gsl_matrix *aux,
-                             const gsl_matrix *Zn, gsl_matrix **Y, gsl_matrix **lambdanon);
+init_likelihood_given_znk(int D,
+                          int K,
+                          int n,
+                          const double *s2Y,
+                          const char *C,
+                          const int *R,
+                          const gsl_matrix *aux,
+                          const gsl_matrix *Zn,
+                          gsl_matrix **Y,
+                          gsl_matrix **lambdanon);
+
+void compute_pseudo_likelihood_given_znk(int D,
+                                         int K,
+                                         int k,
+                                         int N,
+                                         int n,
+                                         int given,
+                                         double s2Rho,
+                                         const double *s2Y,
+                                         const char *C,
+                                         const int *R,
+                                         const gsl_matrix *Zn,
+                                         const gsl_matrix *Enon,
+                                         const gsl_matrix *Snon,
+                                         const gsl_matrix *Znon,
+                                         const gsl_matrix *Rho,
+                                         gsl_matrix *Qnon,       // read only
+                                         gsl_matrix **Y,         // read only
+                                         gsl_matrix **lambdanon,  // read only
+                                         double *like
+);
 
 int log_likelihood_Rho(int N,
                        int K,
