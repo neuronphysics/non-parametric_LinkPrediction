@@ -4,7 +4,7 @@ project(glfm_cuda_acc CUDA)
 set(CMAKE_CUDA_STANDARD 14)
 enable_language(CXX CUDA)
 
-add_executable(glfm_cuda_acc winMain.cpp FakeDrand48.cu ExtendFunction.cu GeneralFunctions.cu InferenceFunctionsNetwork.cu gpuAcc.cu Log.h)
+add_executable(glfm_cuda_acc WinMain.cpp FakeDrand48.cu ExtendFunction.cu Utils.cu InferenceFunctionsNetwork.cu GpuAcc.cu Log.h GibbsSampler.cu GibbsSampler.cuh)
 
 find_package(GSL REQUIRED)
 target_link_libraries(glfm_cuda_acc GSL::gsl GSL::gslcblas)

@@ -1,4 +1,4 @@
-#include "gpuAcc.h"
+#include "GpuAcc.h"
 
 using namespace std;
 

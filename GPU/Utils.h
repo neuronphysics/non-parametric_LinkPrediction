@@ -17,12 +17,19 @@
 #include <gsl/gsl_math.h>
 #include <gsl/gsl_cdf.h>
 #include <gsl/gsl_randist.h>
+#include "GpuAcc.h"
+#include <chrono>
+#include "Log.h"
+#include <cstring>
+#include <cmath>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 
 // if run in non linux environment, please add this line
 #include "FakeDrand48.h"
-#include "gpuAcc.h"
-#include <chrono>
-#include "Log.h"
+
+
 
 //Transformations
 double fre_1(double x, double func, double mu, double w);

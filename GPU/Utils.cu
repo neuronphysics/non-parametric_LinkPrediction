@@ -1,4 +1,4 @@
-#include "GeneralFunctions.h"
+#include "Utils.h"
 
 
 using namespace std;
@@ -138,12 +138,9 @@ void matrix_multiply(gsl_matrix *A, gsl_matrix *B, gsl_matrix *C, double alpha, 
 }
 
 double *column_to_row_major_order(double *A, int nRows, int nCols) {
-
-    //mxArray *copy_mx = mxCreateDoubleMatrix(nRows,nCols,mxREAL);
-    double *copy = (double *) malloc(nRows * nCols * sizeof(double));
-    if (NULL == copy) {
-        LOG(OUTPUT_DEBUG,"Not enough memory (in column_to_row_major_order)\n");
-        //mexErrMsgTxt("Not enough memory (in column_to_row_major_order)\n");
+    auto *copy = (double *) malloc(nRows * nCols * sizeof(double));
+    if (nullptr == copy) {
+        LOG(OUTPUT_NORMAL,"Not enough memory (in column_to_row_major_order)");
     }
 
     for (int i = 0; i < nRows * nCols; i++) {
@@ -293,22 +290,29 @@ void mvnrnd(gsl_vector *x, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_r
 
 double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
 
-    if (xlo > xhi) { LOG(OUTPUT_DEBUG,"error: xlo<xhi"); }
+    if (xlo > xhi) {
+        LOG(OUTPUT_NORMAL,"error: xlo<xhi");
+    }
+
     // when (xlo - mu) / sigma greater than 5, the result will be 1, resulting z = inf
     double plo = gsl_cdf_ugaussian_P((xlo - mu) / sigma);
     if (plo == 1) {
+        LOG(OUTPUT_NORMAL,"plo too large")
         plo = 0.99999;
     }
     double phi = gsl_cdf_ugaussian_P((xhi - mu) / sigma);
     if (phi == 0) {
+        LOG(OUTPUT_NORMAL,"phi too small")
         phi = 0.00001;
     }
     double r = drand48();
     double res = plo + (phi - plo) * r;
     if(res == 1){
+        LOG(OUTPUT_NORMAL,"res too large")
         res = 0.99999999;
     }
     if(res == 0){
+        LOG(OUTPUT_NORMAL,"res too small")
         res = 0.00000001;
     }
 
@@ -317,7 +321,7 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
 }
 
 
-//****Extra utilities for the Link Prediction paper (author: Zahra)
+// Extra utilities for the Link Prediction paper (author: Zahra)
 int gsl_Kronecker_product(gsl_matrix *prod,
                           gsl_matrix *a,
                           gsl_matrix *b) {
@@ -360,7 +364,7 @@ double gsl_trace(gsl_matrix *A) {
     int r = A->size1;
     int c = A->size2;
     if (r != c) {
-        LOG(OUTPUT_DEBUG,"error: cannot calculate trace of non-square matrix.\n");
+        LOG(OUTPUT_NORMAL,"error: cannot calculate trace of non-square matrix.\n");
         return 0;
     }
     // calculate sum of diagonal elements
@@ -404,14 +408,14 @@ double recursive_inverse(int K,
                          gsl_matrix *F,
                          int add) {
     //implementing Miller 1980 C_{k+1}^{-1}=C_{k}^{-1}-C_{k+1}^{-1}E_{k}C_{k+1}^{-1}/(1+tr(C_{k+1}^{-1}E_{k}))
-    //(tested and approved)
+
     gsl_matrix *aux = gsl_matrix_calloc(K * K, K * K);
     gsl_matrix *inv = gsl_matrix_calloc(K * K, K * K);
     gsl_matrix_view X_view = gsl_matrix_submatrix(X, 0, 0, K * K, K * K);
     gsl_Kronecker_product(aux, E, F);
     double t;
     matrix_multiply(&X_view.matrix, aux, inv, 1., 0, CblasNoTrans, CblasNoTrans);
-    if (add) {//In C language "true" is represented by any numeric value "not equal to 0"
+    if (add) {
         t = 1. / (trace(inv, K * K) + 1.);
     } else {
         t = 1. / (trace(inv, K * K) - 1.);
@@ -431,7 +435,6 @@ int rank_one_update_Kronecker_ldet(gsl_matrix *Z,
                                    int N,
                                    int add) {
     //removing a row from kronnecker_product (z,z_n) & (z_n,z) add=0
-    //(tested and approved)
     double nu;
     gsl_matrix *base = gsl_matrix_calloc(K, K);
     gsl_matrix *aux = gsl_matrix_calloc(K, K);
@@ -443,7 +446,6 @@ int rank_one_update_Kronecker_ldet(gsl_matrix *Z,
         matrix_multiply(&Zn.matrix, &Zn.matrix, aux, 1, 0, CblasNoTrans, CblasTrans);
         if (i != index) {
             nu = recursive_inverse(K, Q, base, aux, add);
-            //cout<<nu<<endl;
             if (add == 0) {
                 coeff *= -nu;//remove
             } else {
@@ -465,7 +467,7 @@ int rank_one_update_Kronecker_ldet(gsl_matrix *Z,
     return 0;
 }
 
-
+// todo function contain bug
 int rank_one_update_eta(gsl_matrix *Z,
                         gsl_matrix *zn,
                         gsl_matrix *Rho,
@@ -474,7 +476,6 @@ int rank_one_update_eta(gsl_matrix *Z,
                         int K,
                         int N,
                         int add) {
-    //*compute Eta after removing the n-th row from adjacency matrix
     gsl_matrix *S1 = gsl_matrix_calloc(K * K, N);
     gsl_matrix *S2 = gsl_matrix_calloc(K * K, N);
     gsl_matrix *S3 = gsl_matrix_calloc(K * K, 1);
@@ -498,7 +499,7 @@ int rank_one_update_eta(gsl_matrix *Z,
         matrix_multiply(S1, &RhoT_view.matrix, Eta, 1, 1, CblasNoTrans, CblasTrans);
         matrix_multiply(S3, &Rho_nn.matrix, Eta, -1, 1, CblasNoTrans, CblasNoTrans);
     }
-    //************
+
     gsl_matrix_free(S1);
     gsl_matrix_free(S2);
     gsl_matrix_free(S3);
@@ -670,11 +671,11 @@ int inverse_matrix_Q(double alpha,
     double coef = 0.;
     double det_X = 1;
     double nu;
-    //*****
+
     for (int i = 0; i < N; i++) {
         for (int j = 0; j < N; j++) {
             if (i == 0 && j == 0) {
-                //*****implementing Eq. 46
+                // implementing Eq. 46
                 gsl_matrix_set_identity(&X_view.matrix);
                 gsl_Kronecker_product(E, Y[i], Y[j]);
                 coef = pow(gsl_trace(Y[i]), 2);
@@ -684,7 +685,6 @@ int inverse_matrix_Q(double alpha,
                 gsl_matrix_scale(&X_view.matrix, 1. / alpha);
             } else {
                 nu = recursive_inverse(K, X, Y[i], Y[j], add);
-                //cout<<nu<<"\n"<<endl;
                 det_X *= nu;
             }
         }
