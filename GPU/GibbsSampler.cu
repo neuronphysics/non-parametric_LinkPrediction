@@ -51,7 +51,7 @@ int parallel_sample_znk(int N,
                         const gsl_matrix *Rho,
                         gsl_matrix **Y,         // read only
                         gsl_matrix **lambdanon  // read only
-                        ) {
+) {
 
     unordered_map<string, gsl_matrix *> records;
     double p[2];
@@ -99,6 +99,39 @@ int parallel_sample_znk(int N,
     return startK + 4 < K - 1 ? startK + 4 : K - 1;
 }
 
+double compute_pseudo_likelihood_given_znk(int D,
+                                           int K,
+                                           int k,
+                                           int N,
+                                           int n,
+                                           int given,
+                                           double s2Rho,
+                                           const double *s2Y,
+                                           const char *C,
+                                           const int *R,
+                                           const gsl_matrix *Zn,
+                                           const gsl_matrix *Enon,
+                                           const gsl_matrix *Snon,
+                                           const gsl_matrix *Znon,
+                                           const gsl_matrix *Rho,
+                                           gsl_matrix *Qnon,       // read only
+                                           gsl_matrix **Y,         // read only
+                                           gsl_matrix **lambdanon  // read only
+) {
+    gsl_matrix *ZnCopy = gsl_matrix_calloc(Zn->size1, Zn->size2);
+    gsl_matrix_memcpy(ZnCopy, Zn);
+    gsl_matrix *aux = gsl_matrix_alloc(1, K);
+
+    gsl_matrix_set(ZnCopy, k, 0, given);
+    matrix_multiply(ZnCopy, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
+    double lik = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, ZnCopy, Y, lambdanon);
+    LOG(OUTPUT_DEBUG, "-- lik%d=%f\n", given, lik);
+    log_likelihood_Rho(N, K, n, Znon, ZnCopy, Rho, Qnon, Enon, s2Rho, lik);
+
+    gsl_matrix_free(ZnCopy);
+    gsl_matrix_free(aux);
+    return lik;
+}
 
 void sample_znk(int N,
                 int n,
@@ -119,30 +152,21 @@ void sample_znk(int N,
                 const gsl_matrix *Rho,
                 gsl_matrix **Y,         // read only
                 gsl_matrix **lambdanon  // read only
-                ) {
+) {
     if (nCount > 0) {
-        gsl_matrix *aux = gsl_matrix_alloc(1, K);
-        // z_nk=0
-        gsl_matrix_set(Zn, k, 0, 0);
-        matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-        double lik0 = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, Zn, Y, lambdanon);
-        LOG(OUTPUT_DEBUG, "-- lik0=%f\n", lik0);
-        //compute the pseudo-likelihood given Znk=0
-        log_likelihood_Rho(N, K, n, Znon, Zn, Rho, Qnon, Enon, s2Rho, lik0);
+        // given Znk = 0
+        double lik0 = compute_pseudo_likelihood_given_znk(D, K, k, N, n, 0, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
+                                                          Qnon, Y, lambdanon);
 
-        // z_nk=1
-        gsl_matrix_set(Zn, k, 0, 1);
-        matrix_multiply(Zn, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
-        double lik1 = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, Zn, Y, lambdanon);
-        LOG(OUTPUT_DEBUG, "-- lik1=%f\n", lik1);
-        //Pseudo-likelihood for H when z_nk=1 (marginalised)
-        log_likelihood_Rho(N, K, n, Znon, Zn, Rho, Qnon, Enon, s2Rho, lik1);
+        // given Znk = 1
+        double lik1 = compute_pseudo_likelihood_given_znk(D, K, k, N, n, 1, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
+                                                          Qnon, Y, lambdanon);
 
-        LOG(OUTPUT_DEBUG, "lik0=%f , lik1=%f \n", lik0, lik1);
+        LOG(OUTPUT_DEBUG, "lik0=%f , lik1=%f", lik0, lik1);
         double p0 = gsl_sf_log(N - nCount) + lik0;
         double p1 = gsl_sf_log(nCount) + lik1;
         double p1_n, p0_n;
-        LOG(OUTPUT_DEBUG, "p1=%f, p0=%f \n", p1, p0);
+        LOG(OUTPUT_DEBUG, "p1=%f, p0=%f", p1, p0);
 
         if (p0 > p1) {
             p1_n = expFun(p1 - p0);
@@ -156,7 +180,7 @@ void sample_znk(int N,
             LOG(OUTPUT_NORMAL, "nest[%d]=%d \n", k, nCount);
             LOG(OUTPUT_NORMAL, "lik0=%f , lik1=%f \n", lik0, lik1);
             LOG(OUTPUT_NORMAL,
-                "EXECUTION STOPPED: numerical error at the sampler.\n Please restart the sampler and if error persists check hyperparameters. \n");
+                "EXECUTION STOPPED: numerical error at the sampler.\n Please restart the sampler and if error persists check hyper-parameters. \n");
             return;
         }
         //sampling znk
@@ -164,25 +188,25 @@ void sample_znk(int N,
             gsl_matrix_set(Zn, k, 0, 0);
             p[0] = lik0;
         } else {
+            gsl_matrix_set(Zn, k, 0, 1);
             p[0] = lik1;
         }
-        gsl_matrix_free(aux);
     } else {
         gsl_matrix_set(Zn, k, 0, 0);
     }
 }
 
 double init_likelihood_given_znk(int D,
-                                    int K,
-                                    int n,
-                                    const double *s2Y,
-                                    const char *C,
-                                    const int *R,
-                                    const gsl_matrix *aux,
-                                    const gsl_matrix *Zn,
-                                    gsl_matrix **Y,         // read only
-                                    gsl_matrix **lambdanon  // read only
-                                    ) {
+                                 int K,
+                                 int n,
+                                 const double *s2Y,
+                                 const char *C,
+                                 const int *R,
+                                 const gsl_matrix *aux,
+                                 const gsl_matrix *Zn,
+                                 gsl_matrix **Y,         // read only
+                                 gsl_matrix **lambdanon  // read only
+) {
     double likelihood = 0;
     gsl_matrix *s2y_p = gsl_matrix_calloc(1, 1);
     for (
