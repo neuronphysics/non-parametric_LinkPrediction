@@ -268,57 +268,29 @@ int log_likelihood_Rho(int N,
 
 
 
-
-    chrono::steady_clock::time_point begin = chrono::steady_clock::now();
-    chrono::steady_clock::time_point end;
-
-
-    //compute the covariance
-    gsl_matrix *invSigma = gsl_matrix_calloc(N - 1, N - 1);
-    gsl_matrix_set_identity(invSigma);
-
-    // invSigma = s{-n} * Qnon * s{-n} + I (see equation 20)
-    matrix_multiply(SQnon, S, invSigma, 1, 1, CblasNoTrans, CblasNoTrans);
-    gsl_matrix_scale(invSigma, s2Rho);
-
-    //logdet(X)=log(detX)
-    double s2rho_p = lndet_get(invSigma, N - 1, N - 1);
-    inverse(invSigma, N - 1);
-
-    end = chrono::steady_clock::now();
-    LOG(OUTPUT_NORMAL, "original cost = %lld", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
-    begin = chrono::steady_clock::now();
-
-
-
-    // todo use woodbury formula
+    // use woodbury formula
     gsl_matrix * Qss = gsl_matrix_calloc(Q_view.matrix.size1, Q_view.matrix.size2);
     gsl_matrix_memcpy(Qss, &Q_view.matrix);
     inverse(Qss, Q_view.matrix.size1);
     // by here we have Qnon^-1 + s^Ts
     matrix_multiply(S, S, Qss, 1, 1, CblasNoTrans, CblasTrans);
-    double det = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) + lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
+    double detP = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) + lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
 
     inverse(Qss, Q_view.matrix.size1);
     gsl_matrix * sQss = gsl_matrix_calloc(N - 1, K * K);
-    gsl_matrix * identity = gsl_matrix_calloc(N - 1, N - 1);
-    gsl_matrix_set_identity(identity);
+    gsl_matrix * invSigma = gsl_matrix_calloc(N - 1, N - 1);
+    gsl_matrix_set_identity(invSigma);
     matrix_multiply(S, Qss, sQss, 1, 0, CblasTrans, CblasNoTrans);
     // identity = I - s(Q + ss)s^T
-    matrix_multiply(sQss, S, identity, -1, 1, CblasNoTrans, CblasNoTrans);
-    gsl_matrix_scale(identity, 1 / s2Rho);
+    matrix_multiply(sQss, S, invSigma, -1, 1, CblasNoTrans, CblasNoTrans);
+    gsl_matrix_scale(invSigma, 1 / s2Rho);
 
 
 
-    end = chrono::steady_clock::now();
-    LOG(OUTPUT_NORMAL, "woodbury cost = %lld", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
 
 
 
-    // todo free all the memory
-    gsl_matrix_free(Qss);
-    gsl_matrix_free(sQss);
-    gsl_matrix_free(identity);
+
 
 
 
@@ -349,7 +321,7 @@ int log_likelihood_Rho(int N,
     // Val = (rho_{n,-n} - h^T) * P * (rho_{n,-n} - h^T)
     matrix_multiply(aux, Rho_non, Val, 1, 0, CblasNoTrans, CblasTrans);
 
-    lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + s2rho_p);
+    lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + detP);
 
     gsl_matrix_free(mu);
     gsl_matrix_free(SQnon);
@@ -357,8 +329,10 @@ int log_likelihood_Rho(int N,
     gsl_matrix_free(aux);
     gsl_matrix_free(Rho_non);
     gsl_matrix_free(mu_tran);
-    gsl_matrix_free(invSigma);
     gsl_matrix_free(Val);
+    gsl_matrix_free(Qss);
+    gsl_matrix_free(sQss);
+    gsl_matrix_free(invSigma);
     return 0;
 }
 
