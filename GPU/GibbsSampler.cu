@@ -285,7 +285,9 @@ int log_likelihood_Rho(int N,
     double s2rho_p = lndet_get(invSigma, N - 1, N - 1);
     inverse(invSigma, N - 1);
 
-
+    end = chrono::steady_clock::now();
+    LOG(OUTPUT_NORMAL, "original cost = %lld", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
+    begin = chrono::steady_clock::now();
 
 
 
@@ -306,6 +308,10 @@ int log_likelihood_Rho(int N,
     matrix_multiply(sQss, S, identity, -1, 1, CblasNoTrans, CblasNoTrans);
     gsl_matrix_scale(identity, 1 / s2Rho);
 
+
+
+    end = chrono::steady_clock::now();
+    LOG(OUTPUT_NORMAL, "woodbury cost = %lld", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
 
 
 
