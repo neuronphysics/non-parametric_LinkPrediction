@@ -266,6 +266,13 @@ int log_likelihood_Rho(int N,
     // SQnon = s{-n} * Qnon
     matrix_multiply(S, &Q_view.matrix, SQnon, 1, 0, CblasTrans, CblasNoTrans);
 
+
+
+
+    chrono::steady_clock::time_point begin = chrono::steady_clock::now();
+    chrono::steady_clock::time_point end;
+
+
     //compute the covariance
     gsl_matrix *invSigma = gsl_matrix_calloc(N - 1, N - 1);
     gsl_matrix_set_identity(invSigma);
@@ -278,13 +285,17 @@ int log_likelihood_Rho(int N,
     double s2rho_p = lndet_get(invSigma, N - 1, N - 1);
     inverse(invSigma, N - 1);
 
+
+
+
+
     // todo use woodbury formula
     gsl_matrix * Qss = gsl_matrix_calloc(Q_view.matrix.size1, Q_view.matrix.size2);
     gsl_matrix_memcpy(Qss, &Q_view.matrix);
     inverse(Qss, Q_view.matrix.size1);
     // by here we have Qnon^-1 + s^Ts
     matrix_multiply(S, S, Qss, 1, 1, CblasNoTrans, CblasTrans);
-    double det = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) * lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
+    double det = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) + lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
 
     inverse(Qss, Q_view.matrix.size1);
     gsl_matrix * sQss = gsl_matrix_calloc(N - 1, K * K);
@@ -295,14 +306,7 @@ int log_likelihood_Rho(int N,
     matrix_multiply(sQss, S, identity, -1, 1, CblasNoTrans, CblasNoTrans);
     gsl_matrix_scale(identity, 1 / s2Rho);
 
-    // todo compare
-    for(int i = 0; i < N - 1; i++){
-        for(int j = 0; j < N - 1; j++){
-            if(abs(gsl_matrix_get(identity, i, j) - gsl_matrix_get(invSigma, i, j)) > 0.00000001){
-                LOG(OUTPUT_NORMAL, "Error for woodbury formula")
-            }
-        }
-    }
+
 
 
     // todo free all the memory
