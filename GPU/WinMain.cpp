@@ -89,7 +89,6 @@ int main() {
     int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
     int maxK = 15;          // maximum number of latent features for memory allocation
     double missing = -1;
-    int verbose = 1;
 
     // ---------------------------------- Load data from txt file -------------------------------------
 
@@ -99,7 +98,7 @@ int main() {
     const char *delim = "\t";
 
     // please enter the correct file location
-    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix.txt)", ios::in);
+    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix_200_4.txt)", ios::in);
     while (getline(adjIn, s)) {
         temp.emplace_back(s);
     }
@@ -130,7 +129,7 @@ int main() {
     temp.clear();
     s = "";
     // todo please enter the correct file location
-    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix.txt)", ios::in);
+    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix_200_4.txt)", ios::in);
     while (getline(attributeIn, s)) {
         temp.emplace_back(s);
     }

@@ -156,11 +156,11 @@ void sample_znk(int N,
         double lik0 = 0, lik1 = 0;
         // given Znk = 0
         thread t0(compute_pseudo_likelihood_given_znk, D, K, k, N, n, 0, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
-                 Qnon, Y, lambdanon, &lik0);
+                  Qnon, Y, lambdanon, &lik0);
 
         // given Znk = 1
         thread t1(compute_pseudo_likelihood_given_znk, D, K, k, N, n, 1, s2Rho, s2Y, C, R, Zn, Enon, Snon, Znon, Rho,
-                                            Qnon, Y, lambdanon, &lik1);
+                  Qnon, Y, lambdanon, &lik1);
 
         t0.join();
         t1.join();
@@ -180,8 +180,8 @@ void sample_znk(int N,
         }
         p1_n = p1_n / (p1_n + p0_n);
         if (isinf(p1_n) || isnan(p1_n)) {
-            LOG(OUTPUT_NORMAL, "nest[%d]=%d \n", k, nCount);
-            LOG(OUTPUT_NORMAL, "lik0=%f , lik1=%f \n", lik0, lik1);
+            LOG(OUTPUT_NORMAL, "nest[%d]=%d", k, nCount);
+            LOG(OUTPUT_NORMAL, "lik0=%f , lik1=%f", lik0, lik1);
             LOG(OUTPUT_NORMAL,
                 "EXECUTION STOPPED: numerical error at the sampler.\n Please restart the sampler and if error persists check hyper-parameters. \n");
             return;
@@ -227,27 +227,22 @@ double init_likelihood_given_znk(int D,
         matrix_multiply(aux, &Lnon_view
                 .matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
         if (C[d] == 'c') {
-            for (
-                    int r = 0;
-                    r < R[d] - 1; r++) {
+            for (int r = 0; r < R[d] - 1; r++) {
                 likelihood -= 0.5 /
                               s2y_num *
                               pow((gsl_matrix_get(&Ydn.matrix, r, 0) - gsl_matrix_get(muy, 0, r)), 2)
-                              +
-                              0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+                              + 0.5 * gsl_sf_log(2 * M_PI * s2y_num);
             }
         } else {
             likelihood -= 0.5 /
                           s2y_num *
                           pow((gsl_matrix_get(&Ydn.matrix, 0, 0) - gsl_matrix_get(muy, 0, 0)), 2)
-                          +
-                          0.5 * gsl_sf_log(2 * M_PI * s2y_num);
+                          + 0.5 * gsl_sf_log(2 * M_PI * s2y_num);
         }
         gsl_matrix_free(muy);
     }
     gsl_matrix_free(s2y_p);
-    return
-            likelihood;
+    return likelihood;
 }
 
 
@@ -280,8 +275,43 @@ int log_likelihood_Rho(int N,
     gsl_matrix_scale(invSigma, s2Rho);
 
     //logdet(X)=log(detX)
-    double s2rho_p = lndet_get(invSigma, N - 1, N - 1, 0);
+    double s2rho_p = lndet_get(invSigma, N - 1, N - 1);
     inverse(invSigma, N - 1);
+
+    // todo use woodbury formula
+    gsl_matrix * Qss = gsl_matrix_calloc(Q_view.matrix.size1, Q_view.matrix.size2);
+    gsl_matrix_memcpy(Qss, &Q_view.matrix);
+    inverse(Qss, Q_view.matrix.size1);
+    // by here we have Qnon^-1 + s^Ts
+    matrix_multiply(S, S, Qss, 1, 1, CblasNoTrans, CblasTrans);
+    double det = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) * lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
+
+    inverse(Qss, Q_view.matrix.size1);
+    gsl_matrix * sQss = gsl_matrix_calloc(N - 1, K * K);
+    gsl_matrix * identity = gsl_matrix_calloc(N - 1, N - 1);
+    gsl_matrix_set_identity(identity);
+    matrix_multiply(S, Qss, sQss, 1, 0, CblasTrans, CblasNoTrans);
+    // identity = I - s(Q + ss)s^T
+    matrix_multiply(sQss, S, identity, -1, 1, CblasNoTrans, CblasNoTrans);
+    gsl_matrix_scale(identity, 1 / s2Rho);
+
+    // todo compare
+    for(int i = 0; i < N - 1; i++){
+        for(int j = 0; j < N - 1; j++){
+            if(abs(gsl_matrix_get(identity, i, j) - gsl_matrix_get(invSigma, i, j)) > 0.00000001){
+                LOG(OUTPUT_NORMAL, "Error for woodbury formula")
+            }
+        }
+    }
+
+
+    // todo free all the memory
+    gsl_matrix_free(Qss);
+    gsl_matrix_free(sQss);
+    gsl_matrix_free(identity);
+
+
+
 
     //compute the mean
     matrix_multiply(SQnon, Eta, mu, 1, 0, CblasNoTrans, CblasNoTrans);
@@ -534,7 +564,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             Q_view = gsl_matrix_submatrix(Q, 0, 0, K * K, K * K);
             inverse(&Q_view.matrix, K * K);
 
-            ldet_Q[0] = lndet_get(&Q_view.matrix, K * K, K * K, 0);
+            ldet_Q[0] = lndet_get(&Q_view.matrix, K * K, K * K);
 
             gsl_matrix_memcpy(Qnon, Q);
             memcpy(ldet_Q_n, ldet_Q, sizeof(double));
@@ -546,7 +576,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             remove_col(K, N, n, Znon, &Z_view.matrix);
             compute_inverse_Q_directly(N - 1, K, Znon, beta, &Qnon_view.matrix);
             LOG(OUTPUT_DEBUG, "Removing a feature column ldet_Q=%f, ldet_Qnon = %f\n", ldet_Q[0],
-                lndet_get(&Qnon_view.matrix, K * K, K * K, 0));
+                lndet_get(&Qnon_view.matrix, K * K, K * K));
 
             // compute new full eta
             matrix_multiply(ZoZ, vecRho, eta, 1, 0, CblasNoTrans, CblasNoTrans);

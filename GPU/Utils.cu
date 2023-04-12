@@ -183,31 +183,19 @@ double det_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace) {
     return det;
 }
 
-double lndet_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace) {
-/*
-  inPlace = 1 => A is replaced with the LU decomposed copy.
-  inPlace = 0 => A is retained, and a copy is used for LU.
-*/
-
+double lndet_get(const gsl_matrix *Amat, int Arows, int Acols) {
     double det;
     int signum;
     gsl_permutation *p = gsl_permutation_alloc(Arows);
-    gsl_matrix *tmpA;
 
-    if (inPlace)
-        tmpA = Amat;
-    else {
-        tmpA = gsl_matrix_alloc(Arows, Acols);
-        gsl_matrix_memcpy(tmpA, Amat);
-    }
-
+    gsl_matrix *tmpA = gsl_matrix_alloc(Arows, Acols);
+    gsl_matrix_memcpy(tmpA, Amat);
 
     gsl_linalg_LU_decomp(tmpA, p, &signum);
     det = gsl_linalg_LU_lndet(tmpA);
     gsl_permutation_free(p);
-    if (!inPlace)
-        gsl_matrix_free(tmpA);
 
+    gsl_matrix_free(tmpA);
 
     return det;
 }

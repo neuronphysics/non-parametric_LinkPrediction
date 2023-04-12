@@ -63,7 +63,7 @@ double *column_to_row_major_order(double *A, int nRows, int nCols);
 //double *row_to_column_major_order(double *A,int nRows,int nCols);
 double det_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace);
 
-double lndet_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace);
+double lndet_get(const gsl_matrix *Amat, int Arows, int Acols);
 
 // gsl_matrix *inverse(gsl_matrix *Amat, int Asize);
 void inverse(gsl_matrix *Amat, int Asize);
