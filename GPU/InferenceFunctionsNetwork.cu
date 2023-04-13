@@ -421,8 +421,6 @@ int IBPsampler_func(double missing,
     LOG(OUTPUT_INFO, "Running inference algorithm (currently inside C++ routine...)");
 
     double s2theta = 2;
-    // random numbers
-    srand48(time(nullptr));
 
     gsl_rng *seed = gsl_rng_alloc(gsl_rng_taus);
     time_t clck = time(nullptr);
@@ -561,7 +559,7 @@ int IBPsampler_func(double missing,
                 gsl_vector_set(theta[d], 0, -sqrt(s2Y[d]));
                 for (int r = 1; r < R[d] - 1; r++) {
                     gsl_vector_set(theta[d], r,
-                                   gsl_vector_get(theta[d], r - 1) + (4 * sqrt(s2Y[d]) / maxX) * drand48());
+                                   gsl_vector_get(theta[d], r - 1) + (4 * sqrt(s2Y[d]) / maxX) * rand01());
                 }
                 gsl_vector_set(theta[d], R[d] - 1, GSL_POSINF);
                 for (int n = 0; n < N; n++) {

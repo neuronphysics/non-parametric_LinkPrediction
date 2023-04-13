@@ -175,7 +175,7 @@ int main() {
 
     infer(X, Cin, Z, NETin, (double *) A, Fin, N, D, K, F,
                              bias, s2u, s2B, s2H, alpha, Nsim,
-                             maxK, missing, verbose);
+                             maxK, missing);
 
     delete[] X;
     delete[] A;

@@ -187,7 +187,8 @@ void sample_znk(int N,
             return;
         }
         //sampling znk
-        if (drand48() > p1_n) {
+        double randomNum = rand01();
+        if (randomNum > p1_n) {
             gsl_matrix_set(Zn, k, 0, 0);
             p[0] = lik0;
         } else {
@@ -269,16 +270,17 @@ int log_likelihood_Rho(int N,
 
 
     // use woodbury formula
-    gsl_matrix * Qss = gsl_matrix_calloc(Q_view.matrix.size1, Q_view.matrix.size2);
+    gsl_matrix *Qss = gsl_matrix_calloc(Q_view.matrix.size1, Q_view.matrix.size2);
     gsl_matrix_memcpy(Qss, &Q_view.matrix);
     inverse(Qss, Q_view.matrix.size1);
     // by here we have Qnon^-1 + s^Ts
     matrix_multiply(S, S, Qss, 1, 1, CblasNoTrans, CblasTrans);
-    double detP = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) + lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
+    double detP = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) +
+                  lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
 
     inverse(Qss, Q_view.matrix.size1);
-    gsl_matrix * sQss = gsl_matrix_calloc(N - 1, K * K);
-    gsl_matrix * invSigma = gsl_matrix_calloc(N - 1, N - 1);
+    gsl_matrix *sQss = gsl_matrix_calloc(N - 1, K * K);
+    gsl_matrix *invSigma = gsl_matrix_calloc(N - 1, N - 1);
     gsl_matrix_set_identity(invSigma);
     matrix_multiply(S, Qss, sQss, 1, 0, CblasTrans, CblasNoTrans);
     // identity = I - s(Q + ss)s^T

@@ -25,9 +25,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <ctime>
-
-// if run in non linux environment, please add this line
-#include "FakeDrand48.h"
+#include "random"
 
 
 //Transformations
@@ -115,5 +113,7 @@ void compute_inverse_Q_directly(int N, int K, gsl_matrix *Z, double beta, gsl_ma
 void normal_update_eta(gsl_matrix *Znon, gsl_matrix *Rho, int n, gsl_matrix *Enon);
 
 void print_Zn(gsl_matrix *Zn, int K);
+
+double rand01();
 
 #endif

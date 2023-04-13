@@ -231,7 +231,7 @@ int poissrnd(double lambda) {
     double p = 1;
     do {
         k++;
-        p *= drand48();
+        p *= rand01();
     } while (p > L);
     return (k - 1);
 }
@@ -240,7 +240,7 @@ int poissrnd(double lambda) {
 int mnrnd(double *p, int nK) {
     double pMin = 0;
     double pMax = p[0];
-    double s = drand48();
+    double s = rand01();
     int k = 0;
     int flag = 1;
     int Knew;
@@ -293,7 +293,7 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
         LOG(OUTPUT_NORMAL,"phi too small")
         phi = 0.00001;
     }
-    double r = drand48();
+    double r = rand01();
     double res = plo + (phi - plo) * r;
     if(res == 1){
         LOG(OUTPUT_NORMAL,"res too large")
@@ -732,4 +732,16 @@ void print_Zn(gsl_matrix * Zn, int K){
         cout << gsl_matrix_get(Zn, i, 0) << ", ";
     }
     cout << "\n";
+}
+
+double rand01(){
+    // initialize the random number generator with time-dependent seed
+    uint64_t timeSeed =chrono::high_resolution_clock::now().time_since_epoch().count();
+    seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed>>32)};
+    mt19937_64 rng(ss);
+
+    // initialize a uniform distribution between 0 and 1
+    uniform_real_distribution<double> uniform(0, 1);
+
+    return uniform(rng);
 }
