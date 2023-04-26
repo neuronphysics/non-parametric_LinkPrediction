@@ -58,7 +58,7 @@ int main() {
     const char *delim = "\t";
 
     // todo please enter the correct file location
-    adjIn.open(R"(dataSet\Adjacency_matrix_1500_7.txt)", ios::in);
+    adjIn.open(R"(dataSet/Adjacency_matrix.txt)", ios::in);
     while (getline(adjIn, s)) {
         temp.emplace_back(s);
     }
@@ -89,7 +89,7 @@ int main() {
     temp.clear();
     s = "";
     // todo please enter the correct file location
-    attributeIn.open(R"(dataSet\Attribute_matrix_1500_7.txt)", ios::in);
+    attributeIn.open(R"(dataSet/Attribute_matrix.txt)", ios::in);
     while (getline(attributeIn, s)) {
         temp.emplace_back(s);
     }
