@@ -19,7 +19,6 @@
 #include <gsl/gsl_randist.h>
 
 // if run in non linux environment, please add this line
-#include "FakeDrand48.h"
 #include "gpuAcc.h"
 #include <chrono>
 #include "Log.h"

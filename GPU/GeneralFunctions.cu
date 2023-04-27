@@ -298,18 +298,22 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
     double plo = gsl_cdf_ugaussian_P((xlo - mu) / sigma);
     if (plo == 1) {
         plo = 0.99999;
+        LOG(OUTPUT_NORMAL, "plo too large")
     }
     double phi = gsl_cdf_ugaussian_P((xhi - mu) / sigma);
     if (phi == 0) {
         phi = 0.00001;
+        LOG(OUTPUT_NORMAL, "phi too small")
     }
     double r = drand48();
     double res = plo + (phi - plo) * r;
     if(res == 1){
         res = 0.99999999;
+        LOG(OUTPUT_NORMAL, "res too large")
     }
     if(res == 0){
         res = 0.00000001;
+        LOG(OUTPUT_NORMAL, "res too small")
     }
 
     double z = gsl_cdf_ugaussian_Pinv(res);
