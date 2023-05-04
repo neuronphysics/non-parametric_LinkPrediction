@@ -196,12 +196,12 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         chrono::steady_clock::time_point middle = chrono::steady_clock::now();
         chrono::steady_clock::time_point end;
 
+        //The upper-left element of the submatrix is the element (0,n) of the original matrix. The submatrix has K rows and one column.  Zn_{Kx1}
+        Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
         Pnon_view = gsl_matrix_submatrix(Pnon, 0, 0, K, K);
         // Pnon_view=P - Zn*Zn
         matrix_multiply(&Zn.matrix, &Zn.matrix, &Pnon_view.matrix, -1, 1, CblasNoTrans, CblasTrans);
 
-        //The upper-left element of the submatrix is the element (0,n) of the original matrix. The submatrix has K rows and one column.  Zn_{Kx1}
-        Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
         // Sigma_B   This function allocates memory for a matrix of length n and initializes all the elements of the matrix to zero.
         Snon = gsl_matrix_calloc(K, K);
         gsl_matrix_memcpy(Snon, &Pnon_view.matrix);

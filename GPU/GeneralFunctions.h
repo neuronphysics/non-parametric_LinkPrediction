@@ -23,6 +23,8 @@
 #include <chrono>
 #include "Log.h"
 
+#include "FakeDrand48.h"
+
 //Transformations
 double fre_1(double x, double func, double mu, double w);
 
