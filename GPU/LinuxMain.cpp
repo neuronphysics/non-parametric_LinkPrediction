@@ -34,11 +34,14 @@ int getArraySize(const string &s, const int s_length) {
 
 
 int main() {
+    LOG(OUTPUT_NORMAL, "Version description:")
+    LOG(OUTPUT_NORMAL, VERSION_DECLARE)
+
     char NETin = 'b';
     int N;
     int D;
     // k need to be larger than 1
-    int K = 3;
+    int K = 7;
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise

@@ -724,6 +724,7 @@ int IBPsampler_func(double missing,
 
         //  MuH sometime is very large causing new H become too large
         //  MuH = Q * S^T * vec(rho) = Q * Eta  (see equation 14)
+        // todo
         matrix_multiply(&Q_view.matrix, &Eta_view.matrix, MuH, 1, 0, CblasNoTrans, CblasNoTrans);
         gsl_vector_view MuH_view = gsl_matrix_column(MuH, 0);
 

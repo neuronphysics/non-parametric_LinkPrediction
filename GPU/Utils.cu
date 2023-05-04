@@ -276,6 +276,28 @@ void mvnrnd(gsl_vector *x, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_r
 
 }
 
+// simple version of truncated
+double truncnormrnd_simple(double mu, double sigma, double xlo, double xhi) {
+    double plo = xhi == INFINITY ? 0.5 : 0;
+    double r = rand01();
+    double res = plo + 0.5 * r;
+
+    if(res == 1){
+        LOG(OUTPUT_NORMAL,"res too large, mu = %f, sigma = %f, r = %f", mu, sigma, r)
+        res = 0.99999999;
+    }
+    if(res == 0){
+        LOG(OUTPUT_NORMAL,"res too small, mu = %f, sigma = %f, r = %f", mu, sigma, r)
+        res = 0.00000001;
+    }
+
+    double z = gsl_cdf_ugaussian_Pinv(res);
+    return mu + z * sigma;
+}
+
+
+
+
 double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
 
     if (xlo > xhi) {
@@ -285,22 +307,22 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
     // when (xlo - mu) / sigma greater than 5, the result will be 1, resulting z = inf
     double plo = gsl_cdf_ugaussian_P((xlo - mu) / sigma);
     if (plo == 1) {
-        LOG(OUTPUT_NORMAL,"plo too large")
+        LOG(OUTPUT_NORMAL,"plo too large, mu = %f, sigma = %f", mu, sigma)
         plo = 0.99999;
     }
     double phi = gsl_cdf_ugaussian_P((xhi - mu) / sigma);
     if (phi == 0) {
-        LOG(OUTPUT_NORMAL,"phi too small")
+        LOG(OUTPUT_NORMAL,"phi too small, mu = %f, sigma = %f", mu, sigma)
         phi = 0.00001;
     }
     double r = rand01();
     double res = plo + (phi - plo) * r;
     if(res == 1){
-        LOG(OUTPUT_NORMAL,"res too large")
+        LOG(OUTPUT_NORMAL,"res too large, mu = %f, sigma = %f, r = %f", mu, sigma, r)
         res = 0.99999999;
     }
     if(res == 0){
-        LOG(OUTPUT_NORMAL,"res too small")
+        LOG(OUTPUT_NORMAL,"res too small, mu = %f, sigma = %f, r = %f", mu, sigma, r)
         res = 0.00000001;
     }
 
