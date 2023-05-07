@@ -277,7 +277,7 @@ void mvnrnd(gsl_vector *x, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_r
 }
 
 // simple version of truncated
-double truncnormrnd_simple(double mu, double sigma, double xlo, double xhi) {
+double truncnormrnd_ehsan(double mu, double sigma, double xlo, double xhi) {
     double plo = xhi == INFINITY ? 0.5 : 0;
     double r = rand01();
     double res = plo + 0.5 * r;
@@ -749,12 +749,6 @@ void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * E
     gsl_matrix_free(vecRho_n_n);
 }
 
-void print_Zn(gsl_matrix * Zn, int K){
-    for(int i = 0; i < K; i++){
-        cout << gsl_matrix_get(Zn, i, 0) << ", ";
-    }
-    cout << "\n";
-}
 
 double rand01(){
     // initialize the random number generator with time-dependent seed
@@ -766,4 +760,16 @@ double rand01(){
     uniform_real_distribution<double> uniform(0, 1);
 
     return uniform(rng);
+}
+
+void print_matrix(gsl_matrix * matrix, const string& name){
+    LOG(OUTPUT_INFO, "%s", name.c_str())
+    for (int i = 0; i < matrix->size1; i++) {
+        for (int j = 0; j < matrix->size2; j++) {
+            if (OUTPUT_LEVEL >= OUTPUT_INFO) {
+                printf("%f, ", gsl_matrix_get(matrix, i, j));
+            }
+        }
+        LOG(OUTPUT_INFO, "");
+    }
 }

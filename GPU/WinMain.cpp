@@ -33,47 +33,6 @@ int getArraySize(const string &s, const int s_length) {
 }
 
 
-void compareEtaRes() {
-    int K = 3, N = 5, n = 0;
-    gsl_matrix *Z = gsl_matrix_calloc(K, N);
-    for (int i = 0; i < K; i++) {
-        for (int j = 0; j < N; j++) {
-            if (j % 2 == 0) {
-                gsl_matrix_set(Z, i, j, 1.0);
-            } else {
-                gsl_matrix_set(Z, i, j, 0.0);
-            }
-        }
-    }
-
-    gsl_matrix *Rho = gsl_matrix_calloc(N, N);
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            gsl_matrix_set(Rho, i, j, j * 0.1 + 0.1);
-        }
-    }
-    gsl_matrix_view Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
-
-    gsl_matrix * Eta = gsl_matrix_calloc(K * K, 1);
-
-    rank_one_update_eta(Z, &Zn.matrix, Rho, Eta, n, K, N, 1);
-
-    for(int i = 0; i < K * K; i++){
-        cout << gsl_matrix_get(Eta, i, 0) << " , ";
-    }
-
-    cout << endl;
-
-    gsl_matrix * Znon = gsl_matrix_calloc(K, N - 1);
-    remove_col(K, N, n, Znon, Z);
-    normal_update_eta(Znon, Rho, n, Eta);
-
-    for(int i = 0; i < K * K; i++){
-        cout << gsl_matrix_get(Eta, i, 0) << " , ";
-    }
-}
-
-
 int main() {
     LOG(OUTPUT_NORMAL, "Version description:")
     LOG(OUTPUT_NORMAL, VERSION_DECLARE)
@@ -101,7 +60,7 @@ int main() {
     const char *delim = "\t";
 
     // please enter the correct file location
-    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix_200_4.txt)", ios::in);
+    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix.txt)", ios::in);
     while (getline(adjIn, s)) {
         temp.emplace_back(s);
     }
@@ -132,7 +91,7 @@ int main() {
     temp.clear();
     s = "";
     // todo please enter the correct file location
-    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix_200_4.txt)", ios::in);
+    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix.txt)", ios::in);
     while (getline(attributeIn, s)) {
         temp.emplace_back(s);
     }

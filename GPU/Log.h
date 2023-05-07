@@ -12,7 +12,7 @@
 #define OUTPUT_INFO 2
 #define OUTPUT_NORMAL 1
 
-#define VERSION_DECLARE "We add mu, sigma and r output when truncate normal has bug\n"
+#define VERSION_DECLARE "Test Eshan theory\n"
 
 #define LOG(level, fmt, ...) \
         if(OUTPUT_LEVEL >= level){ \

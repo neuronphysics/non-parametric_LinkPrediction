@@ -288,15 +288,6 @@ int log_likelihood_Rho(int N,
     gsl_matrix_scale(invSigma, 1 / s2Rho);
 
 
-
-
-
-
-
-
-
-
-
     //compute the mean
     matrix_multiply(SQnon, Eta, mu, 1, 0, CblasNoTrans, CblasNoTrans);
     //compute the likelihood
@@ -399,8 +390,9 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
     gsl_matrix_memcpy(etanon, eta);
     memcpy(ldet_Q_n, ldet_Q, sizeof(double));
 
+    // todo test only
     //sample every user
-    for (int n = 0; n < N; n++) {
+    for (int n = 0; n < 10; n++) {
         auto *p = new double[TK];
         for (int i = 0; i < TK; i++) {
             p[i] = 0.0;

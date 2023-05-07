@@ -628,12 +628,20 @@ int IBPsampler_func(double missing,
             }
         }
     }
+    // todo debug only
+    print_matrix(vecRho, "init Rho");
+
 
     // compute full Eta
     gsl_matrix *Eta = gsl_matrix_calloc(maxK * maxK, 1);
     gsl_matrix *ZoZ = gsl_matrix_calloc(maxK * maxK, N * N);
     gsl_Kronecker_product(ZoZ, Z, Z);
     matrix_multiply(ZoZ, vecRho, Eta, 1, 0, CblasNoTrans, CblasNoTrans);
+
+
+    // todo debug only
+    print_matrix(Eta, "init Eta");
+
 
     gsl_matrix *Etanon = gsl_matrix_calloc(maxK * maxK, 1);
     gsl_matrix_free(ZoZ);
@@ -731,16 +739,14 @@ int IBPsampler_func(double missing,
         mvnrnd(&vecH_view.vector, &Q_view.matrix, &MuH_view.vector, Kest * Kest, seed);
 
         gsl_vector2matrix(vecH, &H_view.matrix);
-        LOG(OUTPUT_INFO, "new H\n");
 
-        for (int i = 0; i < Kest; i++) {
-            for (int j = 0; j < Kest; j++) {
-                if (OUTPUT_LEVEL >= OUTPUT_INFO) {
-                    cout << gsl_matrix_get(&H_view.matrix, i, j) << " , ";
-                }
-            }
-            LOG(OUTPUT_INFO, "");
-        }
+        print_matrix(&H_view.matrix, "new H");
+
+        print_matrix(MuH, "Mu H");
+        print_matrix(&Q_view.matrix, "Q matrix");
+        print_matrix(&Eta_view.matrix, "Eta matrix");
+
+
 
         // *****End Sampling Hs
         // sampleRho

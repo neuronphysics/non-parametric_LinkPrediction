@@ -26,6 +26,8 @@
 #include <cstdlib>
 #include <ctime>
 #include "random"
+#include "string"
+#include "ostream"
 
 
 //Transformations
@@ -112,8 +114,7 @@ void compute_inverse_Q_directly(int N, int K, gsl_matrix *Z, double beta, gsl_ma
 
 void normal_update_eta(gsl_matrix *Znon, gsl_matrix *Rho, int n, gsl_matrix *Enon);
 
-void print_Zn(gsl_matrix *Zn, int K);
-
 double rand01();
 
+void print_matrix(gsl_matrix * matrix, const std::string& name);
 #endif
