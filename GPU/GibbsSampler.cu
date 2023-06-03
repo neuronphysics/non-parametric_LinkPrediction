@@ -120,10 +120,26 @@ void compute_pseudo_likelihood_given_znk(int D,
 ) {
     gsl_matrix *ZnCopy = gsl_matrix_calloc(Zn->size1, Zn->size2);
     gsl_matrix_memcpy(ZnCopy, Zn);
-    gsl_matrix *aux = gsl_matrix_alloc(1, K);
+    gsl_matrix *aux = gsl_matrix_calloc(1, K);
 
     gsl_matrix_set(ZnCopy, k, 0, given);
     matrix_multiply(ZnCopy, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
+
+
+    // todo debug only
+    bool broken = false;
+    for(int i = 0; i< K; i++){
+        if(isnan(gsl_matrix_get(aux, 0, i))){
+            broken = true;
+        }
+    }
+    if(broken){
+        print_matrix(aux, "aux");
+        print_matrix(Snon, "Snon");
+        print_matrix(ZnCopy, "ZnCopy");
+    }
+
+
     *like = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, ZnCopy, Y, lambdanon);
     LOG(OUTPUT_DEBUG, "-- like%d=%f\n", given, *like);
     log_likelihood_Rho(N, K, n, Znon, ZnCopy, Rho, Qnon, Enon, s2Rho, *like);
@@ -224,7 +240,7 @@ double init_likelihood_given_znk(int D,
         double s2y_num = gsl_matrix_get(s2y_p, 0, 0);
         const gsl_matrix_view Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
         const gsl_matrix_view Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
-        gsl_matrix *muy = gsl_matrix_alloc(1, R[d]);
+        gsl_matrix *muy = gsl_matrix_calloc(1, R[d]);
         matrix_multiply(aux, &Lnon_view
                 .matrix, muy, 1, 0, CblasNoTrans, CblasNoTrans);
         if (C[d] == 'c') {
@@ -241,6 +257,13 @@ double init_likelihood_given_znk(int D,
                           + 0.5 * gsl_sf_log(2 * M_PI * s2y_num);
         }
         gsl_matrix_free(muy);
+
+        if (s2y_num <= 0 || isnan(s2y_num) || isnan(likelihood)) {
+            LOG(OUTPUT_NORMAL, "Wrong value s2y_num = %f s2y_d = %f, lik = %f", s2y_num, s2Y[d], likelihood)
+            print_matrix(aux, "aux matrix");
+            print_matrix(Zn, "Zn matrix");
+        }
+
     }
     gsl_matrix_free(s2y_p);
     return likelihood;
@@ -316,6 +339,10 @@ int log_likelihood_Rho(int N,
 
     lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + detP);
 
+    if (isnan(lik)) {
+        LOG(OUTPUT_NORMAL, "Val = %f, detP = %f", gsl_matrix_get(Val, 0, 0), detP)
+    }
+
     gsl_matrix_free(mu);
     gsl_matrix_free(SQnon);
     gsl_matrix_free(S);
@@ -369,9 +396,8 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
     gsl_matrix *aux;//aux=Zn^T_{1xK}*P^{-1}_{KxK}
     gsl_matrix *Snon;//Snon= P^{-1}
     double beta = s2Rho / s2H;
-    double s2y_num;//sigma=sigma_{y}
-    gsl_matrix *ZoZ = gsl_matrix_calloc(maxK * maxK, N * N);
 
+    gsl_matrix *ZoZ;
     gsl_matrix *Iden;//Identity matrix
     gsl_matrix *Qexp;
     gsl_matrix *Qmatrix;
@@ -390,9 +416,8 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
     gsl_matrix_memcpy(etanon, eta);
     memcpy(ldet_Q_n, ldet_Q, sizeof(double));
 
-    // todo test only
     //sample every user
-    for (int n = 0; n < 10; n++) {
+    for (int n = 0; n < N; n++) {
         auto *p = new double[TK];
         for (int i = 0; i < TK; i++) {
             p[i] = 0.0;
@@ -413,6 +438,23 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
         // Snon=Pnon_view^{-1}
         inverse(Snon, K);
+
+        // todo debug only
+        bool broken = false;
+        for(int i = 0; i < Snon->size1; i++){
+            for(int j = 0; j < Snon->size2; j++){
+                if(isnan(gsl_matrix_get(Snon, i, j))){
+                    broken = true;
+                    goto logpoint;
+                }
+            }
+        }
+        logpoint: if(broken){
+            print_matrix(Snon, "Broken Snon");
+            print_matrix(Pnon, "Broken Pnon");
+            print_matrix(P, "Broken P");
+        }
+
 
         for (int d = 0; d < D; d++) {
             Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
@@ -443,6 +485,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
         // compute etanon
         normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
+
 
         end = chrono::steady_clock::now();
         LOG(OUTPUT_DEBUG, "Prepare Enon and rho cost =  %lld [ms]",
@@ -477,11 +520,12 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             }
         }
 
-        // todo verify nest count
 
         end = chrono::steady_clock::now();
-        LOG(OUTPUT_INFO, "Sample all K cost = %lld [ms]",
-            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        if ((n + 1) % 50 == 0) {
+            LOG(OUTPUT_INFO, "[%d / %d] Sample all K cost = %lld [ms]", n + 1, N,
+                chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        }
         middle = end;
 
 
@@ -537,9 +581,12 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
             // compute new full Q
             gsl_matrix_set_identity(Q);
-            gsl_Kronecker_product(ZoZ, Z, Z);
-            matrix_multiply(ZoZ, ZoZ, Q, 1, beta, CblasNoTrans, CblasTrans);
             Q_view = gsl_matrix_submatrix(Q, 0, 0, K * K, K * K);
+
+            ZoZ = gsl_matrix_calloc(K * K, N * N);
+            gsl_Kronecker_product(ZoZ, &Z_view.matrix, &Z_view.matrix);
+            matrix_multiply(ZoZ, ZoZ, &Q_view.matrix, 1, beta, CblasNoTrans, CblasTrans);
+
             inverse(&Q_view.matrix, K * K);
 
             ldet_Q[0] = lndet_get(&Q_view.matrix, K * K, K * K);
@@ -557,7 +604,9 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 lndet_get(&Qnon_view.matrix, K * K, K * K));
 
             // compute new full eta
-            matrix_multiply(ZoZ, vecRho, eta, 1, 0, CblasNoTrans, CblasNoTrans);
+            gsl_matrix_view Eta_view = gsl_matrix_submatrix(eta, 0, 0, K * K, 1);
+            matrix_multiply(ZoZ, vecRho, &Eta_view.matrix, 1, 0, CblasNoTrans, CblasNoTrans);
+            gsl_matrix_free(ZoZ);
 
             // compute new Etanon
             Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
@@ -591,7 +640,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                 gsl_vector_set_basis(&Pnon_colum.vector, K + j - 1);
                 //because we have P=Z^TZ+1/s2B I (modified this compared to Isabel's code)?
                 //gsl_vector_scale(&Pnon_colum.vector, 1/s2B);//**?Is it correct???? It is me adding this not in the Isabel's code
-                aux = gsl_matrix_alloc(1, K + j);
+                aux = gsl_matrix_calloc(1, K + j);
                 Pnon_view = gsl_matrix_submatrix(Pnon, 0, 0, K + j, K + j);
                 Snon = gsl_matrix_calloc(K + j, K + j);
                 gsl_matrix_memcpy(Snon, &Pnon_view.matrix);
@@ -709,10 +758,12 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
 
         // compute full eta
-        gsl_Kronecker_product(ZoZ, Z, Z);
+        ZoZ = gsl_matrix_calloc(K * K, N * N);
+        gsl_Kronecker_product(ZoZ, &Z_view.matrix, &Z_view.matrix);
         matrix_multiply(ZoZ, vecRho, &Enon_view.matrix, 1, 0, CblasNoTrans, CblasNoTrans);
         gsl_matrix_memcpy(eta, etanon);
 
+        gsl_matrix_free(ZoZ);
         delete[] p;
 
 
@@ -721,10 +772,11 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
-        LOG(OUTPUT_INFO, "Total cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count());
+        if ((n + 1) % 50 == 0) {
+            LOG(OUTPUT_INFO, "[%d / %d] Total cost = %lld [ms]", n + 1, N,
+                chrono::duration_cast<chrono::milliseconds>(end - begin).count());
+        }
+
     }
-
-    gsl_matrix_free(ZoZ);
-
     return K;
 }

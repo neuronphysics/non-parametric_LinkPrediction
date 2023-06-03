@@ -168,7 +168,7 @@ double det_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace) {
     if (inPlace)
         tmpA = Amat;
     else {
-        tmpA = gsl_matrix_alloc(Arows, Acols);
+        tmpA = gsl_matrix_calloc(Arows, Acols);
         gsl_matrix_memcpy(tmpA, Amat);
     }
 
@@ -188,7 +188,7 @@ double lndet_get(const gsl_matrix *Amat, int Arows, int Acols) {
     int signum;
     gsl_permutation *p = gsl_permutation_alloc(Arows);
 
-    gsl_matrix *tmpA = gsl_matrix_alloc(Arows, Acols);
+    gsl_matrix *tmpA = gsl_matrix_calloc(Arows, Acols);
     gsl_matrix_memcpy(tmpA, Amat);
 
     gsl_linalg_LU_decomp(tmpA, p, &signum);
@@ -261,7 +261,7 @@ int mnrnd(double *p, int nK) {
 
 void mvnrnd(gsl_vector *x, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_rng *seed) {
 
-    gsl_matrix *A = gsl_matrix_alloc(K, K);
+    gsl_matrix *A = gsl_matrix_calloc(K, K);
     gsl_matrix_memcpy(A, Sigma);
     gsl_linalg_cholesky_decomp(A);
 
@@ -274,49 +274,29 @@ void mvnrnd(gsl_vector *x, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_r
     // a = a + b
     gsl_vector_add(x, Mu);
 
-}
-
-// simple version of truncated
-double truncnormrnd_ehsan(double mu, double sigma, double xlo, double xhi) {
-    double plo = xhi == INFINITY ? 0.5 : 0;
-    double r = rand01();
-    double res = plo + 0.5 * r;
-
-    if(res == 1){
-        LOG(OUTPUT_NORMAL,"res too large, mu = %f, sigma = %f, r = %f", mu, sigma, r)
-        res = 0.99999999;
-    }
-    if(res == 0){
-        LOG(OUTPUT_NORMAL,"res too small, mu = %f, sigma = %f, r = %f", mu, sigma, r)
-        res = 0.00000001;
-    }
-
-    double z = gsl_cdf_ugaussian_Pinv(res);
-    return mu + z * sigma;
+    // H = op(Q) * normal distribution + Q * Eta
 }
 
 
-
-
-double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
-
+double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_rng* rng) {
     if (xlo > xhi) {
         LOG(OUTPUT_NORMAL,"error: xlo<xhi");
     }
 
     // when (xlo - mu) / sigma greater than 5, the result will be 1, resulting z = inf
-    double plo = gsl_cdf_ugaussian_P((xlo - mu) / sigma);
+    double plo = gsl_cdf_gaussian_P((xlo - mu) / sigma, 1.0);
     if (plo == 1) {
         LOG(OUTPUT_NORMAL,"plo too large, mu = %f, sigma = %f", mu, sigma)
         plo = 0.99999;
     }
-    double phi = gsl_cdf_ugaussian_P((xhi - mu) / sigma);
+    double phi = gsl_cdf_gaussian_P((xhi - mu) / sigma, 1.0);
     if (phi == 0) {
         LOG(OUTPUT_NORMAL,"phi too small, mu = %f, sigma = %f", mu, sigma)
         phi = 0.00001;
     }
-    double r = rand01();
-    double res = plo + (phi - plo) * r;
+
+    double r = gsl_rng_uniform(rng);
+    double res = r * (phi - plo) + plo;
     if(res == 1){
         LOG(OUTPUT_NORMAL,"res too large, mu = %f, sigma = %f, r = %f", mu, sigma, r)
         res = 0.99999999;
@@ -326,7 +306,7 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi) {
         res = 0.00000001;
     }
 
-    double z = gsl_cdf_ugaussian_Pinv(res);
+    double z = gsl_cdf_gaussian_Pinv(res, 1.0);
     return mu + z * sigma;
 }
 
@@ -528,7 +508,7 @@ int rank_one_update_Kronecker(gsl_matrix *Z,
     gsl_matrix_view Z_view;
     gsl_matrix **Y = (gsl_matrix **) calloc(N, sizeof(gsl_matrix *));
     for (int i = 0; i < N; i++) {
-        Y[i] = gsl_matrix_alloc(K, K);
+        Y[i] = gsl_matrix_calloc(K, K);
         Z_view = gsl_matrix_submatrix(Z, 0, i, K, 1);
         matrix_multiply(&Z_view.matrix, &Z_view.matrix, Y[i], 1, 0, CblasNoTrans, CblasTrans);
     }
@@ -672,7 +652,7 @@ int inverse_matrix_Q(double alpha,
     gsl_matrix_view X_view = gsl_matrix_submatrix(X, 0, 0, K * K, K * K);
     gsl_matrix **Y = (gsl_matrix **) calloc(N, sizeof(gsl_matrix *));
     for (int d = 0; d < N; d++) {
-        Y[d] = gsl_matrix_alloc(K, K);
+        Y[d] = gsl_matrix_calloc(K, K);
         Z_view = gsl_matrix_submatrix(Z, 0, d, K, 1);
         matrix_multiply(&Z_view.matrix, &Z_view.matrix, Y[d], 1, 0, CblasNoTrans, CblasTrans);
     }
@@ -729,9 +709,9 @@ void compute_inverse_Q_directly(int N,
 
 // will only update Enon, Znon and Rho will not be touched
 void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * Enon){
-    gsl_matrix *ZnonOZnon = gsl_matrix_alloc(Znon->size1 * Znon->size1, Znon->size2 * Znon->size2);
+    gsl_matrix *ZnonOZnon = gsl_matrix_calloc(Znon->size1 * Znon->size1, Znon->size2 * Znon->size2);
     gsl_Kronecker_product(ZnonOZnon, Znon, Znon);
-    gsl_matrix *rhocy = gsl_matrix_alloc(Rho->size1, Rho->size2);
+    gsl_matrix *rhocy = gsl_matrix_calloc(Rho->size1, Rho->size2);
     gsl_matrix_memcpy(rhocy, Rho);
 
     for (int i = n; i < Rho->size1 - 1; i++) {
@@ -739,7 +719,7 @@ void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * E
         gsl_matrix_swap_columns(rhocy, i, i + 1);
     }
     gsl_matrix_view rho_n_n = gsl_matrix_submatrix(rhocy, 0, 0, Rho->size1 - 1, Rho->size2 - 1);
-    gsl_matrix *vecRho_n_n = gsl_matrix_alloc((Rho->size1 - 1) * (Rho->size2 - 1), 1);
+    gsl_matrix *vecRho_n_n = gsl_matrix_calloc((Rho->size1 - 1) * (Rho->size2 - 1), 1);
     gsl_matrix2vector(vecRho_n_n, &rho_n_n.matrix);
 
     matrix_multiply(ZnonOZnon, vecRho_n_n, Enon, 1, 0, CblasNoTrans, CblasNoTrans);
@@ -762,14 +742,24 @@ double rand01(){
     return uniform(rng);
 }
 
-void print_matrix(gsl_matrix * matrix, const string& name){
-    LOG(OUTPUT_INFO, "%s", name.c_str())
+void print_matrix(const gsl_matrix * matrix, const string& name, size_t entryPerRow){
+    if(entryPerRow == 0){
+        // use default value
+        entryPerRow = matrix->size2;
+    }
+    size_t counter = 0;
+
+    LOG(OUTPUT_INFO, "\n%s", name.c_str())
     for (int i = 0; i < matrix->size1; i++) {
         for (int j = 0; j < matrix->size2; j++) {
             if (OUTPUT_LEVEL >= OUTPUT_INFO) {
                 printf("%f, ", gsl_matrix_get(matrix, i, j));
+                counter++;
             }
         }
-        LOG(OUTPUT_INFO, "");
+        if(counter == entryPerRow){
+            LOG(OUTPUT_INFO, "")
+            counter = 0;
+        }
     }
 }

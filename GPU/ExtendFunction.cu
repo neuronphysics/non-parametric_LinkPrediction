@@ -54,7 +54,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     gsl_matrix *A;
     gsl_matrix *Zm;
 
-    LOG(OUTPUT_DEBUG, "N=%d, D=%d, K=%d", N, D, K);
+    LOG(OUTPUT_NORMAL, "N=%d, D=%d, K=%d, s2u=%f, s2B=%f, s2H=%f, alpha=%f", N, D, K, s2u, s2B, s2H, alpha)
 
 
     // transpose input matrices in order to be able to call inner C function
@@ -107,10 +107,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     // always return 1
     int maxR = initialize_func(N, D, maxK, missing, X, C, B, theta, R, Fin, mu, w, s2Y);
 
-    LOG(OUTPUT_DEBUG, "done");
-
-
-    LOG(OUTPUT_DEBUG, "maxR = %d", maxR);
+    LOG(OUTPUT_DEBUG, "Init step 1 done, maxR = %d", maxR);
 
 
 
@@ -118,9 +115,9 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     LOG(OUTPUT_DEBUG, "\nEntering C++: Running Inference Routine...\n");
     double s2Rho;
     if (Net[0] == 'w') {
-        s2Rho = 2;
+        s2Rho = 0.5;
     } else {
-        s2Rho = 1;
+        s2Rho = 0.0025;
     }
 
 
@@ -188,7 +185,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
             idx_tmp = R[d];
         }
         Bd_view = gsl_matrix_submatrix(B[d], 0, 0, Kest, idx_tmp);
-        BT = gsl_matrix_alloc(idx_tmp, Kest);
+        BT = gsl_matrix_calloc(idx_tmp, Kest);
         gsl_matrix_transpose_memcpy(BT, &Bd_view.matrix);
 
         for (int k = 0; k < Kest; k++) {

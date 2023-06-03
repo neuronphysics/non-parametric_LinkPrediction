@@ -41,15 +41,15 @@ int main() {
     int N;
     int D;
     // k need to be larger than 1
-    int K = 7;
+    int K = 3;
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise
     double s2B = 0.2;       // noise variance for feature values
     double s2H = 0.001;
-    double alpha = 0.5;     // mass parameter for the Indian Buffet Process
+    double alpha = 10;     // mass parameter for the Indian Buffet Process
     int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
-    int maxK = 15;          // maximum number of latent features for memory allocation
+    int maxK = 20;          // maximum number of latent features for memory allocation
     double missing = -1;
 
     // ---------------------------------- Load data from txt file -------------------------------------
@@ -90,7 +90,6 @@ int main() {
 
     temp.clear();
     s = "";
-    // todo please enter the correct file location
     attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix.txt)", ios::in);
     while (getline(attributeIn, s)) {
         temp.emplace_back(s);

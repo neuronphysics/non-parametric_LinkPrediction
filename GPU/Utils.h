@@ -79,7 +79,7 @@ int mnrnd(double *p, int nK);
 
 void mvnrnd(gsl_vector *X, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_rng *seed);
 
-double truncnormrnd(double mu, double sigma, double xlo, double xhi);
+double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_rng * rng);
 
 int gsl_Kronecker_product(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b);
 
@@ -116,5 +116,5 @@ void normal_update_eta(gsl_matrix *Znon, gsl_matrix *Rho, int n, gsl_matrix *Eno
 
 double rand01();
 
-void print_matrix(gsl_matrix * matrix, const std::string& name);
+void print_matrix(const gsl_matrix * matrix, const std::string& name, size_t entryPerRow = 0);
 #endif
