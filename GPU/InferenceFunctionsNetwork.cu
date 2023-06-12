@@ -416,8 +416,6 @@ int IBPsampler_func(double missing,
                     double s2u,
                     int maxK,
                     int Nsim) {
-
-    LOG(OUTPUT_NORMAL, "N=%d, D=%d, K=%d", N, D, K);
     LOG(OUTPUT_INFO, "Running inference algorithm (currently inside C++ routine...)");
 
     double s2theta = 2;
@@ -642,7 +640,7 @@ int IBPsampler_func(double missing,
     matrix_multiply(ZoZ, vecRho, &Eta_init_view.matrix, 1, 0, CblasNoTrans, CblasNoTrans);
     gsl_matrix_free(ZoZ);
 
-    // todo debug only
+
     print_matrix(Eta, "init Eta", maxK);
 
 
@@ -654,12 +652,12 @@ int IBPsampler_func(double missing,
 
     // main loop
     for (int it = 0; it < Nsim; it++) {
-        LOG(OUTPUT_NORMAL, "Start iteration %d", it);
+        print_iteration_num(it);
         gsl_vector2matrix(vecRho, Rho);
         int Kaux = AcceleratedGibbs(maxK, bias, N, D, Kest, C, R, alpha, s2B, s2Y, s2H, s2Rho, Y, Rho, vecRho, Z, nest,
                                     P, Pnon, lambda, lambdanon, Q, Qnon, Eta, Etanon, &ldet_Q, &ldet_Q_n);
 
-        LOG(OUTPUT_NORMAL, "iteration %d, K= %d\n", it, Kaux);
+        LOG(OUTPUT_NORMAL, "new K = %d", Kaux);
 
 
         if (Kaux == 0) { return Kest; } else { Kest = Kaux; }
@@ -712,14 +710,6 @@ int IBPsampler_func(double missing,
 
         // Sample Hs
         gsl_matrix_view H_view = gsl_matrix_submatrix(H, 0, 0, Kest, Kest);
-
-        LOG(OUTPUT_DEBUG, "old H");
-        for (int i = 0; i < Kest; i++) {
-            for (int j = 0; j < Kest; j++) {
-                LOG(OUTPUT_DEBUG, "%3.2f", gsl_matrix_get(&H_view.matrix, i, j));
-            }
-            LOG(OUTPUT_DEBUG, "")
-        }
         gsl_matrix *MuH = gsl_matrix_calloc(Kest * Kest, 1);
 
         gsl_matrix *vecH = gsl_matrix_calloc(Kest * Kest, 1);
@@ -740,40 +730,39 @@ int IBPsampler_func(double missing,
 
         gsl_vector2matrix(vecH, &H_view.matrix);
 
+
+        // make H matrix symmetrical
+        print_matrix(&H_view.matrix, "H matrix before sym");
+        gsl_matrix * H_lower_triangular = gsl_matrix_calloc(Kest, Kest);
+        gsl_matrix_transpose_memcpy(H_lower_triangular, &H_view.matrix);
+        gsl_matrix_add(&H_view.matrix, H_lower_triangular);
+        gsl_matrix_scale(&H_view.matrix, 0.5);
+        gsl_matrix_free(H_lower_triangular);
+
+
         print_matrix(&Eta_view.matrix, "Eta matrix", Kest);
-        print_matrix(&H_view.matrix, "new H");
-        print_matrix(MuH, "Mu H");
+        print_matrix(&H_view.matrix, "new H matrix");
+        print_matrix(MuH, "Mu H matrix");
         print_matrix(&Q_view.matrix, "Q matrix");
+        print_matrix((const gsl_matrix**)B, "B matrix", D, Kest);
 
 
-        // *****End Sampling Hs
         // sampleRho
-
         SampleRho(missing, N, Kest, Net[0], fa, s2Rho, s2u, A, Z, vecRho, &H_view.matrix, seed);
+
         // sample the variance of Rho and H
         s2Rho = Samples2Rho(N, Kest, A, Z, vecRho, vecH, seed);
         s2H = Samples2H(Kest, vecH, seed);
 
         alpha = SampleAlpha(Kest, N, seed);
 
-        LOG(OUTPUT_INFO, "\n");
+        LOG(OUTPUT_INFO, "");
         LOG(OUTPUT_INFO, "s2_rho --> %.3f", s2Rho);
         LOG(OUTPUT_INFO, "s2_h   --> %.3f", s2H);
         LOG(OUTPUT_INFO, "alpha  --> %.3f", alpha);
+        LOG(OUTPUT_INFO, "\n\n");
 
-
-        LOG(OUTPUT_INFO, "\n\nB matrix");
-        for (int i = 0; i < D; i++) {
-            gsl_matrix *Brow = B[i];
-            for (int j = 0; j < Kest; j++) {
-                if (OUTPUT_LEVEL >= OUTPUT_INFO) {
-                    cout << gsl_matrix_get(Brow, j, 0) << " , ";
-                }
-            }
-            LOG(OUTPUT_INFO, "");
-        }
-        LOG(OUTPUT_INFO, "\n");
-
+        print_matrix(vecRho, "Rho matrix", N);
 
         gsl_matrix_free(vecH);
         gsl_matrix_free(MuH);

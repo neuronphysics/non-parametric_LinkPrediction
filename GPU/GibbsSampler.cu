@@ -126,20 +126,6 @@ void compute_pseudo_likelihood_given_znk(int D,
     matrix_multiply(ZnCopy, Snon, aux, 1, 0, CblasTrans, CblasNoTrans);
 
 
-    // todo debug only
-    bool broken = false;
-    for(int i = 0; i< K; i++){
-        if(isnan(gsl_matrix_get(aux, 0, i))){
-            broken = true;
-        }
-    }
-    if(broken){
-        print_matrix(aux, "aux");
-        print_matrix(Snon, "Snon");
-        print_matrix(ZnCopy, "ZnCopy");
-    }
-
-
     *like = init_likelihood_given_znk(D, K, n, s2Y, C, R, aux, ZnCopy, Y, lambdanon);
     LOG(OUTPUT_DEBUG, "-- like%d=%f\n", given, *like);
     log_likelihood_Rho(N, K, n, Znon, ZnCopy, Rho, Qnon, Enon, s2Rho, *like);
@@ -439,22 +425,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         // Snon=Pnon_view^{-1}
         inverse(Snon, K);
 
-        // todo debug only
-        bool broken = false;
-        for(int i = 0; i < Snon->size1; i++){
-            for(int j = 0; j < Snon->size2; j++){
-                if(isnan(gsl_matrix_get(Snon, i, j))){
-                    broken = true;
-                    goto logpoint;
-                }
-            }
-        }
-        logpoint: if(broken){
-            print_matrix(Snon, "Broken Snon");
-            print_matrix(Pnon, "Broken Pnon");
-            print_matrix(P, "Broken P");
-        }
-
 
         for (int d = 0; d < D; d++) {
             Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
@@ -538,7 +508,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
         int Kdel = 0;
         for (int k = 0; k < K; k++) {
             if (nest[k] == 0 && K - Kdel > 1) {
-                LOG(OUTPUT_INFO, "remove empty features: K= %d .......\n", K);
+                LOG(OUTPUT_INFO, "remove empty features: K= %d .......", K);
                 Kdel++;
                 flagDel = 1;
                 for (int kk = k; kk < K - 1; kk++) {
@@ -557,7 +527,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
 
 
         if (flagDel) {
-            LOG(OUTPUT_INFO, "Update P and Q after removing a zero feature column ......\n");
+            LOG(OUTPUT_INFO, "Update P and Q after removing a zero feature column ......");
 
             // compute new full P
             gsl_matrix_set_identity(P);
@@ -600,7 +570,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             Znon = gsl_matrix_calloc(K, N - 1);
             remove_col(K, N, n, Znon, &Z_view.matrix);
             compute_inverse_Q_directly(N - 1, K, Znon, beta, &Qnon_view.matrix);
-            LOG(OUTPUT_DEBUG, "Removing a feature column ldet_Q=%f, ldet_Qnon = %f\n", ldet_Q[0],
+            LOG(OUTPUT_DEBUG, "Removing a feature column ldet_Q=%f, ldet_Qnon = %f", ldet_Q[0],
                 lndet_get(&Qnon_view.matrix, K * K, K * K));
 
             // compute new full eta
@@ -613,7 +583,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
 
             gsl_matrix_free(Znon);
-            LOG(OUTPUT_DEBUG, "End of updating Eta after removing a feature column.......\n");
+            LOG(OUTPUT_DEBUG, "End of updating Eta after removing a feature column.......");
         }
 
 
@@ -720,7 +690,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
             }
             int Knew = mnrnd(p, kk);
             if (Knew > 0) {
-                LOG(OUTPUT_INFO, "add new feature ....\n");
+                LOG(OUTPUT_INFO, "add new feature ....");
                 for (int k = K; k < K + Knew; k++) { nest[k] = 1; }
             }
             K += Knew;

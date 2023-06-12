@@ -12,7 +12,7 @@
 #define OUTPUT_INFO 2
 #define OUTPUT_NORMAL 1
 
-#define VERSION_DECLARE "Inspect NAN problem, change alloc to calloc \n"
+#define VERSION_DECLARE "Test none symmatrix H on 800 data set \n"
 
 #define LOG(level, fmt, ...) \
         if(OUTPUT_LEVEL >= level){ \

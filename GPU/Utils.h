@@ -28,7 +28,10 @@
 #include "random"
 #include "string"
 #include "ostream"
+#include "fstream"
 
+extern std::ofstream matrixOut;
+extern uint64_t timeSeed;
 
 //Transformations
 double fre_1(double x, double func, double mu, double w);
@@ -55,7 +58,8 @@ int factorial(int N);
 int poissrnd(double lambda);
 
 //gsl_matrix *double2gsl(double *Amat, int nRows, int nCols);
-void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double alpha, double beta, CBLAS_TRANSPOSE_t TransA,
+void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double alpha, double beta,
+                     CBLAS_TRANSPOSE_t TransA,
                      CBLAS_TRANSPOSE_t TransB);
 
 double *column_to_row_major_order(double *A, int nRows, int nCols);
@@ -79,7 +83,7 @@ int mnrnd(double *p, int nK);
 
 void mvnrnd(gsl_vector *X, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_rng *seed);
 
-double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_rng * rng);
+double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_rng *rng);
 
 int gsl_Kronecker_product(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b);
 
@@ -116,5 +120,12 @@ void normal_update_eta(gsl_matrix *Znon, gsl_matrix *Rho, int n, gsl_matrix *Eno
 
 double rand01();
 
-void print_matrix(const gsl_matrix * matrix, const std::string& name, size_t entryPerRow = 0);
+void print_iteration_num(int iterationNum);
+
+void print_matrix(const gsl_matrix **matrix, const std::string &name, int rowNum, int columnNum);
+
+void print_matrix(const gsl_matrix *matrix, const std::string &name, size_t entryPerRow = 0);
+
+void init_util_functions(const std::string &exeName);
+
 #endif

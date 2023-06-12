@@ -2,17 +2,13 @@
 #define GLFM_CUDA_ACC_GPUACC_H
 
 #include <gsl/gsl_matrix.h>
-#include <stdio.h>
 #include <iostream>
-#include <fstream>
-#include <vector>
-#include <string>
+#include <gsl/gsl_cblas.h>
 
 #pragma comment(lib, "cuda.lib")
 #pragma comment(lib, "cudart.lib")
 
-#include <math.h>
-#include <gsl/gsl_cblas.h>
+
 
 void gpuInverseMethod1(gsl_matrix *original, gsl_matrix *inverseM);
 

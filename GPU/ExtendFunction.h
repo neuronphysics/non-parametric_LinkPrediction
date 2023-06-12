@@ -5,22 +5,6 @@
 #ifndef GLFM_C_PART_EXTENDFUNCTION_H
 #define GLFM_C_PART_EXTENDFUNCTION_H
 
-#include <cstring>
-#include <cmath>
-#include <cstdio>
-#include <cstdlib>
-#include <iostream>
-#include <ctime>
-#include <gsl/gsl_sf_exp.h>
-#include <gsl/gsl_sf_log.h>
-#include <gsl/gsl_blas.h>
-#include <gsl/gsl_matrix.h>
-#include <gsl/gsl_eigen.h>
-#include <gsl/gsl_vector.h>
-#include <gsl/gsl_linalg.h>
-#include <gsl/gsl_math.h>
-#include <gsl/gsl_cdf.h>
-#include <gsl/gsl_randist.h>
 #include "InferenceFunctionsNetwork.h"
 
 /**

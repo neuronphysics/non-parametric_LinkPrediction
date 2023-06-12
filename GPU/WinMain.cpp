@@ -1,10 +1,3 @@
-#include <stdio.h>
-#include "gsl/gsl_statistics_float.h"
-#include <fstream>
-#include <istream>
-#include <string>
-#include <cstring>
-#include <vector>
 #include "ExtendFunction.h"
 
 using namespace std;
@@ -33,7 +26,7 @@ int getArraySize(const string &s, const int s_length) {
 }
 
 
-int main() {
+int main(int argc, char** argv) {
     LOG(OUTPUT_NORMAL, "Version description:")
     LOG(OUTPUT_NORMAL, VERSION_DECLARE)
 
@@ -53,31 +46,42 @@ int main() {
     double missing = -1;
 
     // ---------------------------------- Load data from txt file -------------------------------------
+    init_util_functions(argv[0]);
 
-    ifstream adjIn, attributeIn;
-    vector<string> temp;
-    string s;
+
+    string dataSetName = "_200_4";
+
+    string filePath = R"(E:\clion projects\glfm_cuda_acc\dataSet\)";
+    string adjFileName = "Adjacency_matrix";
+    string attrFileName = "Attribute_matrix";
+
+
+    vector<string> lines;
+    string line;
     const char *delim = "\t";
 
-    // please enter the correct file location
-    adjIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Adjacency_matrix.txt)", ios::in);
-    while (getline(adjIn, s)) {
-        temp.emplace_back(s);
+
+    ifstream adjIn(filePath + adjFileName + dataSetName + ".txt");
+    ifstream attributeIn(filePath + attrFileName + dataSetName + ".txt");
+
+
+    while (getline(adjIn, line)) {
+        lines.emplace_back(line);
     }
     adjIn.close();
 
-    s = temp.at(0);
-    N = getArraySize(s, s.length());
+    line = lines.at(0);
+    N = getArraySize(line, line.length());
     int **adjacencyMatrix = new int *[N];
     for (int i = 0; i < N; i++) {
         adjacencyMatrix[i] = new int[N];
     }
 
 
-    char *c = new char[s.length() + 1];
+    char *c = new char[line.length() + 1];
 
     for (int i = 0; i < N; i++) {
-        strcpy(c, temp.at(i).c_str());
+        strcpy(c, lines.at(i).c_str());
         char *p = strtok(c, delim);
         adjacencyMatrix[i][0] = stoi(p);
 
@@ -88,25 +92,24 @@ int main() {
     }
 
 
-    temp.clear();
-    s = "";
-    attributeIn.open(R"(E:\clion projects\glfm_cuda_acc\dataSet\Attribute_matrix.txt)", ios::in);
-    while (getline(attributeIn, s)) {
-        temp.emplace_back(s);
+    lines.clear();
+    line = "";
+    while (getline(attributeIn, line)) {
+        lines.emplace_back(line);
     }
     attributeIn.close();
 
 
-    s = temp.at(0);
-    D = getArraySize(s, s.length());
+    line = lines.at(0);
+    D = getArraySize(line, line.length());
     auto **attribute = new double *[N];
     for (int i = 0; i < N; i++) {
         attribute[i] = new double[D];
     }
-    char *c2 = new char[s.length() + 100];
+    char *c2 = new char[line.length() + 100];
 
-    for (int i = 0; i < temp.size(); i++) {
-        strcpy(c2, temp.at(i).c_str());
+    for (int i = 0; i < lines.size(); i++) {
+        strcpy(c2, lines.at(i).c_str());
         char *p = strtok(c2, delim);
         attribute[i][0] = strtod(p, nullptr);
 
@@ -139,7 +142,6 @@ int main() {
     // -------------------------------- Create Zin -------------------------------------
 
     // fake random generate
-    srand(1);
     int random;
     auto *Z = new double[K * N];
     for (int i = 0; i < K; i++) {
@@ -174,6 +176,9 @@ int main() {
     delete[] adjacencyMatrix;
 
 
+    delete[] c2;
+    delete[] c;
+
     infer(X, Cin, Z, NETin, (double *) A, Fin, N, D, K, F,
           bias, s2u, s2B, s2H, alpha, Nsim,
           maxK, missing);
@@ -181,9 +186,8 @@ int main() {
     delete[] X;
     delete[] A;
     delete[] Z;
-    delete[] c;
     delete[] Fin;
     delete[] Cin;
-    delete[] c2;
+
     return 0;
 }

@@ -1,7 +1,11 @@
+#include <iomanip>
 #include "Utils.h"
 
 
 using namespace std;
+
+ofstream matrixOut;
+uint64_t timeSeed;
 
 double fre_1(double x, double func, double mu, double w) {
     return w * (x - mu);
@@ -14,7 +18,7 @@ double f_1(double x, double func, double mu, double w) {
     } else if (func == 2) {
         return sqrt(w * (x - mu));
     } else {
-        LOG(OUTPUT_DEBUG,"error: unknown transformation function. Used default transformation log(exp(y)-1)");
+        LOG(OUTPUT_DEBUG, "error: unknown transformation function. Used default transformation log(exp(y)-1)");
         return logFun(gsl_sf_exp(w * (x - mu)) - 1);
     }
 }
@@ -31,7 +35,7 @@ double f_w(double x, double func, double mu, double w) {
     } else if (func == 2) {
         return sqrt(w * (x - mu));
     } else {
-        LOG(OUTPUT_DEBUG,"error: unknown transformation function. Used default transformation log(exp(y)-1)");
+        LOG(OUTPUT_DEBUG, "error: unknown transformation function. Used default transformation log(exp(y)-1)");
         if (x != 0) {
             return (1 / w) * (logFun(gsl_sf_exp(x) - 1) - mu);
         } else {
@@ -109,10 +113,10 @@ double compute_matrix_max(double missing, gsl_matrix *v) {
 
 double logFun(double x) {
     if (x == 0) {
-        LOG(OUTPUT_DEBUG,"logarithm of 0 is -inf \n");
+        LOG(OUTPUT_DEBUG, "logarithm of 0 is -inf \n");
         return GSL_NEGINF;
     } else if (x < 0) {
-        LOG(OUTPUT_DEBUG,"Error: logarithm is not defined for negative numbers\n");
+        LOG(OUTPUT_DEBUG, "Error: logarithm is not defined for negative numbers\n");
         return -1;
     } else { return gsl_sf_log(x); }
 }
@@ -131,7 +135,8 @@ int factorial(int N) {
     return fact;
 }
 
-void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double alpha, double beta, CBLAS_TRANSPOSE_t TransA,
+void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double alpha, double beta,
+                     CBLAS_TRANSPOSE_t TransA,
                      CBLAS_TRANSPOSE_t TransB) {
     // C = alpha * AB + beta * C
     gpuMatrixMultiply(A, B, C, alpha, beta, TransA, TransB);
@@ -140,7 +145,7 @@ void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, do
 double *column_to_row_major_order(double *A, int nRows, int nCols) {
     auto *copy = (double *) malloc(nRows * nCols * sizeof(double));
     if (nullptr == copy) {
-        LOG(OUTPUT_NORMAL,"Not enough memory (in column_to_row_major_order)");
+        LOG(OUTPUT_NORMAL, "Not enough memory (in column_to_row_major_order)");
     }
 
     for (int i = 0; i < nRows * nCols; i++) {
@@ -151,7 +156,6 @@ double *column_to_row_major_order(double *A, int nRows, int nCols) {
 
     return copy;
 }
-
 
 
 double det_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace) {
@@ -208,7 +212,6 @@ void inverse(gsl_matrix *Amat, int Asize) {
 
     LOG(OUTPUT_DEBUG, "Inverse cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
 }
-
 
 
 double trace(gsl_matrix *Amat, int Asize) {
@@ -278,31 +281,31 @@ void mvnrnd(gsl_vector *x, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_r
 }
 
 
-double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_rng* rng) {
+double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_rng *rng) {
     if (xlo > xhi) {
-        LOG(OUTPUT_NORMAL,"error: xlo<xhi");
+        LOG(OUTPUT_NORMAL, "error: xlo<xhi");
     }
 
     // when (xlo - mu) / sigma greater than 5, the result will be 1, resulting z = inf
     double plo = gsl_cdf_gaussian_P((xlo - mu) / sigma, 1.0);
     if (plo == 1) {
-        LOG(OUTPUT_NORMAL,"plo too large, mu = %f, sigma = %f", mu, sigma)
+        LOG(OUTPUT_NORMAL, "plo too large, mu = %f, sigma = %f", mu, sigma)
         plo = 0.99999;
     }
     double phi = gsl_cdf_gaussian_P((xhi - mu) / sigma, 1.0);
     if (phi == 0) {
-        LOG(OUTPUT_NORMAL,"phi too small, mu = %f, sigma = %f", mu, sigma)
+        LOG(OUTPUT_NORMAL, "phi too small, mu = %f, sigma = %f", mu, sigma)
         phi = 0.00001;
     }
 
     double r = gsl_rng_uniform(rng);
     double res = r * (phi - plo) + plo;
-    if(res == 1){
-        LOG(OUTPUT_NORMAL,"res too large, mu = %f, sigma = %f, r = %f", mu, sigma, r)
+    if (res == 1) {
+        LOG(OUTPUT_NORMAL, "res too large, mu = %f, sigma = %f, r = %f", mu, sigma, r)
         res = 0.99999999;
     }
-    if(res == 0){
-        LOG(OUTPUT_NORMAL,"res too small, mu = %f, sigma = %f, r = %f", mu, sigma, r)
+    if (res == 0) {
+        LOG(OUTPUT_NORMAL, "res too small, mu = %f, sigma = %f, r = %f", mu, sigma, r)
         res = 0.00000001;
     }
 
@@ -354,7 +357,7 @@ double gsl_trace(gsl_matrix *A) {
     int r = A->size1;
     int c = A->size2;
     if (r != c) {
-        LOG(OUTPUT_NORMAL,"error: cannot calculate trace of non-square matrix.\n");
+        LOG(OUTPUT_NORMAL, "error: cannot calculate trace of non-square matrix.\n");
         return 0;
     }
     // calculate sum of diagonal elements
@@ -449,9 +452,9 @@ int rank_one_update_Kronecker_ldet(gsl_matrix *Z,
             coeff *= nu;
         }
     }
-    
+
     ldet_Q[0] += gsl_sf_log(coeff);
-    LOG(OUTPUT_DEBUG,"log(det(Q))=%f....\n", ldet_Q[0]);
+    LOG(OUTPUT_DEBUG, "log(det(Q))=%f....\n", ldet_Q[0]);
     gsl_matrix_free(aux);
     gsl_matrix_free(base);
     return 0;
@@ -513,12 +516,12 @@ int rank_one_update_Kronecker(gsl_matrix *Z,
         matrix_multiply(&Z_view.matrix, &Z_view.matrix, Y[i], 1, 0, CblasNoTrans, CblasTrans);
     }
 
-    for(int i = 0; i < N; i++){
-        if(i == index){
+    for (int i = 0; i < N; i++) {
+        if (i == index) {
             continue;
         }
-        for(int j = 0; j < N; j++){
-            if(j == index){
+        for (int j = 0; j < N; j++) {
+            if (j == index) {
                 continue;
             }
 
@@ -635,7 +638,7 @@ gsl_matrix *inverse_sigma_rho(gsl_matrix *Znon,//Kx(N-1)
     gsl_matrix_free(aux);
     gsl_matrix_free(base);
     gsl_matrix_free(F);
-    
+
     return sigma;
 }
 
@@ -690,10 +693,10 @@ int inverse_matrix_Q(double alpha,
 }
 
 void compute_inverse_Q_directly(int N,
-                               int K,
-                               gsl_matrix *Z,
-                               double beta,
-                               gsl_matrix *Q) {
+                                int K,
+                                gsl_matrix *Z,
+                                double beta,
+                                gsl_matrix *Q) {
     // it cleans Q to identity matrix
     gsl_matrix_set_identity(Q);
     gsl_matrix *S = gsl_matrix_calloc(K * K, N * N);
@@ -708,7 +711,7 @@ void compute_inverse_Q_directly(int N,
 }
 
 // will only update Enon, Znon and Rho will not be touched
-void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * Enon){
+void normal_update_eta(gsl_matrix *Znon, gsl_matrix *Rho, int n, gsl_matrix *Enon) {
     gsl_matrix *ZnonOZnon = gsl_matrix_calloc(Znon->size1 * Znon->size1, Znon->size2 * Znon->size2);
     gsl_Kronecker_product(ZnonOZnon, Znon, Znon);
     gsl_matrix *rhocy = gsl_matrix_calloc(Rho->size1, Rho->size2);
@@ -730,10 +733,9 @@ void normal_update_eta(gsl_matrix * Znon, gsl_matrix *Rho, int n, gsl_matrix * E
 }
 
 
-double rand01(){
+double rand01() {
     // initialize the random number generator with time-dependent seed
-    uint64_t timeSeed =chrono::high_resolution_clock::now().time_since_epoch().count();
-    seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed>>32)};
+    seed_seq ss{uint32_t(timeSeed & 0xffffffff), uint32_t(timeSeed >> 32)};
     mt19937_64 rng(ss);
 
     // initialize a uniform distribution between 0 and 1
@@ -742,24 +744,50 @@ double rand01(){
     return uniform(rng);
 }
 
-void print_matrix(const gsl_matrix * matrix, const string& name, size_t entryPerRow){
-    if(entryPerRow == 0){
+void print_iteration_num(int iterationNum){
+    LOG(OUTPUT_NORMAL, "Start iteration %d", iterationNum);
+    matrixOut <<"\n\nStart iteration " << to_string(iterationNum) << endl;
+}
+
+void print_matrix(const gsl_matrix *matrix, const string &name, size_t entryPerRow) {
+    if (entryPerRow == 0) {
         // use default value
         entryPerRow = matrix->size2;
     }
     size_t counter = 0;
 
-    LOG(OUTPUT_INFO, "\n%s", name.c_str())
+    matrixOut << endl << name << endl;
     for (int i = 0; i < matrix->size1; i++) {
         for (int j = 0; j < matrix->size2; j++) {
-            if (OUTPUT_LEVEL >= OUTPUT_INFO) {
-                printf("%f, ", gsl_matrix_get(matrix, i, j));
-                counter++;
-            }
+            matrixOut << to_string(gsl_matrix_get(matrix, i, j)) << ", ";
+            counter++;
         }
-        if(counter == entryPerRow){
-            LOG(OUTPUT_INFO, "")
+
+        if (counter == entryPerRow) {
+            matrixOut << endl;
             counter = 0;
         }
     }
+    matrixOut.flush();
+}
+
+void print_matrix(const gsl_matrix **matrix, const string &name, int rowNum, int columnNum){
+    matrixOut << endl << name << endl;
+    for (int i = 0; i < rowNum; i++) {
+        const gsl_matrix * row = matrix[i];
+        for (int j = 0; j < columnNum; j++) {
+            matrixOut << to_string(gsl_matrix_get(row, j, 0)) << ", ";
+
+            if(j == columnNum - 1){
+                matrixOut << endl;
+            }
+        }
+    }
+    matrixOut.flush();
+}
+
+void init_util_functions(const string &exeName) {
+    timeSeed = chrono::high_resolution_clock::now().time_since_epoch().count();
+    string fileName = exeName.substr(0, exeName.find('.'));
+    matrixOut.open(fileName + "_matrix_log");
 }
