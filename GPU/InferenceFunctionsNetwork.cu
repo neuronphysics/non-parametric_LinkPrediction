@@ -389,33 +389,34 @@ double Samples2H(int K, gsl_matrix *vecH, const gsl_rng *seed) {
 }
 
 
-int IBPsampler_func(double missing,
-                    gsl_matrix *X,
-                    char *C,
-                    char *Net,//*** the type of network
-                    gsl_matrix *Z, //The binary feature vector
-                    gsl_matrix **B, //the weighting vectors D * maxK * 1, initially all 0
-                    gsl_vector **theta,
-                    gsl_matrix *H,// The homophily matrix
-                    gsl_matrix *A,// The adjacency matrix
-                    int *R, //unordered index set of the categorical data
-                    double *f, //mapping function from the real space R into the observation space
-                    double fa,
-                    double *mu, // mean, mu[d] = mean(X[d]) the mean value of an attribute to all nodes
-                    double *w, //variance
-                    int maxR,
-                    int bias,
-                    int N,
-                    int D,
-                    int K,
-                    double alpha,
-                    double s2B,
-                    double *s2Y,
-                    double s2Rho,
-                    double s2H,
-                    double s2u,
-                    int maxK,
-                    int Nsim) {
+int IBPsampler_func(double missing,     // how the missing data is defined
+                    gsl_matrix *X,      // user-attribute matrix, real observation of the users
+                    char *C,            // define the data type of each attribute
+                    char *Net,          // the type of network
+                    gsl_matrix *Z,      // the IBP latent feature matrix
+                    gsl_matrix **B,     // the weighting vectors D * maxK * 1, initially all 0
+                    gsl_vector **theta, // ?
+                    gsl_matrix *H,      // the homophilic matrix
+                    gsl_matrix *A,      // the adjacency matrix
+                    int *R,             // the number of categories in each discrete attribute
+                    double *f,          // mapping function from the real space R into the observation space
+                    double fa,          // ? used in weighted network
+                    double *mu,         // mean, mu[d] = mean(X[d]) the mean value of an attribute to all nodes
+                    double *w,          // ?
+                    int maxR,           // ? always 1
+                    int bias,           // the index of actual feature, also you can treat it as the number of random feature
+                    int N,              // number of users
+                    int D,              // number of attributes
+                    int K,              // initial number of features
+                    double alpha,       // the concentration parameter
+                    double s2B,         // variance of the weighting matrix??
+                    double *s2Y,        // noise variance of the pseudo-observation of the attribute matrix
+                    double s2Rho,       // noise variance of the pseudo-observation of the adjacency matrix
+                    double s2H,         // variance of the affinity matrix
+                    double s2u,         // auxiliary variance noise
+                    int maxK,           // max number of features
+                    int Nsim            // numbers of iterations for training
+                    ) {
     LOG(OUTPUT_INFO, "Running inference algorithm (currently inside C++ routine...)");
 
     double s2theta = 2;

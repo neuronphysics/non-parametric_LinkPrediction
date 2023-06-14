@@ -61,7 +61,7 @@ void compute_pseudo_likelihood_given_znk(int D,
                                          double *like
 );
 
-int log_likelihood_Rho(int N,
+void log_likelihood_Rho(int N,
                        int K,
                        int r,
                        const gsl_matrix *Znon,// Z_{-n} N-1 x K matrix
