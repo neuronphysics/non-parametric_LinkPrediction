@@ -9,12 +9,14 @@
 #pragma comment(lib, "cudart.lib")
 
 
-
 void gpuInverseMethod1(gsl_matrix *original, gsl_matrix *inverseM);
 
-void gpuInverseMethod2(gsl_matrix *original, gsl_matrix *inverseM);
+void
+gpuMatrixMultiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double scale1, double scale2,
+                  CBLAS_TRANSPOSE_t transA,
+                  CBLAS_TRANSPOSE_t transB);
 
 void
-gpuMatrixMultiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double scale1, double scale2, CBLAS_TRANSPOSE_t transA,
-                  CBLAS_TRANSPOSE_t transB);
+gpuKron(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *Res);
+
 #endif //GLFM_CUDA_ACC_GPUACC_H

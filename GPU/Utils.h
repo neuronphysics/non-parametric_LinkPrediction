@@ -33,90 +33,64 @@
 extern std::ofstream matrixOut;
 extern uint64_t timeSeed;
 
-//Transformations
+// transformations
 double fre_1(double x, double func, double mu, double w);
 
 double f_1(double x, double func, double mu, double w);
 
 double f_w(double x, double func, double mu, double w);
 
-double fint_1(double x, double w, double theta_L, double theta_H);
 
-// General functions
-double compute_vector_mean(int N, double missing, gsl_vector *v);
 
-double compute_vector_var(int N, double missing, gsl_vector *v);
+// vector computation
+double compute_vector_mean(int N, double missing, const gsl_vector *v);
 
-double compute_vector_max(int N, double missing, gsl_vector *v);
+double compute_vector_var(int N, double missing, const gsl_vector *v);
 
-double compute_vector_min(int N, double missing, gsl_vector *v);
+double compute_vector_max(int N, double missing, const gsl_vector *v);
 
-double compute_matrix_max(double missing, gsl_matrix *v);
+double compute_vector_min(int N, double missing, const gsl_vector *v);
 
-int factorial(int N);
 
-int poissrnd(double lambda);
 
-//gsl_matrix *double2gsl(double *Amat, int nRows, int nCols);
-void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double alpha, double beta,
-                     CBLAS_TRANSPOSE_t TransA,
-                     CBLAS_TRANSPOSE_t TransB);
-
-double *column_to_row_major_order(double *A, int nRows, int nCols);
-
-//double *row_to_column_major_order(double *A,int nRows,int nCols);
-double det_get(gsl_matrix *Amat, int Arows, int Acols, int inPlace);
-
-double lndet_get(const gsl_matrix *Amat, int Arows, int Acols);
-
-// gsl_matrix *inverse(gsl_matrix *Amat, int Asize);
-void inverse(gsl_matrix *Amat, int Asize);
-
-double trace(gsl_matrix *Amat, int Asize);
-
-double logFun(double x);
-
-double expFun(double x);
-
-//Sampling functions
+// sampling functions
 int mnrnd(double *p, int nK);
 
 void mvnrnd(gsl_vector *X, gsl_matrix *Sigma, gsl_vector *Mu, int K, const gsl_rng *seed);
 
 double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_rng *rng);
 
-int gsl_Kronecker_product(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b);
 
-int gsl_matrix2vector(gsl_matrix *vect, gsl_matrix *matrix);
+// matrix operations
+void matrix_multiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double alpha, double beta,
+                     CBLAS_TRANSPOSE_t TransA,
+                     CBLAS_TRANSPOSE_t TransB);
 
-int gsl_vector2matrix(gsl_matrix *vect, gsl_matrix *matrix);
+void inverse(gsl_matrix *matrix);
 
-double gsl_trace(gsl_matrix *A);
+void gsl_Kronecker_product(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b);
 
-int remove_col(int K, int N, int i, gsl_matrix *Sn, gsl_matrix *Z);//remove a row from matrix Z
+void gsl_matrix2vector(gsl_matrix *vect, gsl_matrix *matrix);
 
-double recursive_inverse(int K, gsl_matrix *X, gsl_matrix *E, gsl_matrix *F, int add);
+void gsl_vector2matrix(gsl_matrix *vect, gsl_matrix *matrix);
 
-int
-rank_one_update_eta(gsl_matrix *Z, gsl_matrix *zn, gsl_matrix *Rho, gsl_matrix *Eta, int index, int K, int N, int add);
+void remove_col(int K, int N, int i, gsl_matrix *out, gsl_matrix *in);
 
-int rank_one_update_Kronecker_ldet(gsl_matrix *Z, gsl_matrix *Q, double *ldet_Q, int index, int K, int N, int add);
+void compute_inverse_Q_directly(int N, int K, const gsl_matrix *Z, double beta, gsl_matrix *Q);
 
-int rank_one_update_Kronecker(gsl_matrix *Z, gsl_matrix *Zn, gsl_matrix *Q, int index, int K, int N, int add);
+void normal_update_eta(const gsl_matrix *Znon, const gsl_matrix *Rho, int n, gsl_matrix *Enon);
 
-int rank_one_update_covariance_rho(gsl_matrix *Z, gsl_matrix *Zn, gsl_matrix *Q, gsl_matrix *m, double s2Rho, int index,
-                                   int K, int N, int add);
 
-int Update_Q_after_removing(int N, int K, int index, double beta, gsl_matrix *Z, gsl_matrix *Qnon, int add);
 
-gsl_matrix *inverse_sigma_rho(gsl_matrix *Znon, gsl_matrix *Zn, gsl_matrix *Q, gsl_matrix *S, int index, int K, int N,
-                              double s2Rho);
+void init_util_functions(const std::string &exeName);
 
-int inverse_matrix_Q(double alpha, gsl_matrix *Z, gsl_matrix *X, int N, int K, double *ldet_X);
+int factorial(int N);
 
-void compute_inverse_Q_directly(int N, int K, gsl_matrix *Z, double beta, gsl_matrix *Q);
+double log(double x);
 
-void normal_update_eta(gsl_matrix *Znon, gsl_matrix *Rho, int n, gsl_matrix *Enon);
+double expFun(double x);
+
+double lndet_get(const gsl_matrix *Amat, int Arows, int Acols);
 
 double rand01();
 
@@ -126,6 +100,8 @@ void print_matrix(const gsl_matrix **matrix, const std::string &name, int rowNum
 
 void print_matrix(const gsl_matrix *matrix, const std::string &name, size_t entryPerRow = 0);
 
-void init_util_functions(const std::string &exeName);
 
+
+
+void quick_update_eta(const gsl_matrix *Z, const gsl_matrix *Rho, int n, gsl_matrix *Enon);
 #endif

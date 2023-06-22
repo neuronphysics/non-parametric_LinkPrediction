@@ -8,11 +8,12 @@
 #ifndef GLFM_CUDA_ACC_LOG_H
 #define GLFM_CUDA_ACC_LOG_H
 
+#define OUTPUT_CONCURRENT 4
 #define OUTPUT_DEBUG 3
 #define OUTPUT_INFO 2
 #define OUTPUT_NORMAL 1
 
-#define VERSION_DECLARE "Test none symmatrix H on 800 data set \n"
+#define VERSION_DECLARE "Rerun 800 new data set \n"
 
 #define LOG(level, fmt, ...) \
         if(OUTPUT_LEVEL >= level){ \

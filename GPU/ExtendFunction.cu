@@ -49,43 +49,42 @@ Function to call inference routine for GLFM model from Python code
 void
 infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin, int N, int D, int K, double F,
       int bias, double s2u, double s2B, double s2H, double alpha, int Nsim, int maxK, double missing) {
-    gsl_matrix_view Xview, Zview, Aview;
-    gsl_matrix *X;
-    gsl_matrix *A;
-    gsl_matrix *Zm;
-
     LOG(OUTPUT_NORMAL, "N=%d, D=%d, K=%d, s2u=%f, s2B=%f, s2H=%f, alpha=%f", N, D, K, s2u, s2B, s2H, alpha)
 
+    gsl_matrix_view Xview, Zview, Aview;
+    gsl_matrix *X, *A, *Z;
 
-    // transpose input matrices in order to be able to call inner C function
     if (strlen(Cin) != D) {
         LOG(OUTPUT_NORMAL, "EXCEPTION! Size of C and X are not consistent!");
         return;
     }
 
-    // gsl_matrix_view_array takes 1-D array
-    Zview = gsl_matrix_view_array(Zin, K, N);
-    // we need to allocate input matrix Z to [maxK*N] matrix
-    Zm = &Zview.matrix;
-    gsl_matrix *Z = gsl_matrix_calloc(maxK, N);
-    for (int i = 0; i < N; i++) {
-        for (int k = 0; k < K; k++) {
-            gsl_matrix_set(Z, k, i, gsl_matrix_get(Zm, k, i));
-        }
-    }
-
     char *C = new char[D];
     for (int d = 0; d < D; d++) {
-        // convert to lower case
         C[d] = (char) tolower(Cin[d]);
     }
 
-
-    //  Determine the type of Adjacency matrix whether it is a binary matrix or matrix contains positive weights of each edge
+    // Determine the type of Adjacency matrix whether it is a binary matrix or matrix contains positive weights of each edge
     char Net[1];
     Net[0] = (char) tolower(NETin);
 
-    //...............BODY CODE.......................
+    double s2Rho;
+    if (Net[0] == 'w') {
+        s2Rho = 0.5;
+    } else {
+        s2Rho = 0.0025;
+    }
+
+
+    // gsl_matrix_view_array takes 1-D array
+    Zview = gsl_matrix_view_array(Zin, K, N);
+    Z = gsl_matrix_calloc(maxK, N);
+    for (int i = 0; i < N; i++) {
+        for (int k = 0; k < K; k++) {
+            gsl_matrix_set(Z, k, i, gsl_matrix_get(&Zview.matrix, k, i));
+        }
+    }
+
     Xview = gsl_matrix_view_array(Xin, D, N);
     X = &Xview.matrix;
 
@@ -97,34 +96,22 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     auto **B = (gsl_matrix **) malloc(D * sizeof(gsl_matrix *));
     auto **theta = (gsl_vector **) malloc(D * sizeof(gsl_vector *));
 
-    // initialize the free parameter of truncated Guassian
+    // initialize the free parameter of truncated Gaussian
     gsl_matrix *H = gsl_matrix_calloc(maxK, maxK);
     auto *w = (double *) malloc(D * sizeof(double));
     auto *mu = (double *) malloc(D * sizeof(double));
     auto *s2Y = (double *) malloc(D * sizeof(double));
     auto *R = new int32_t[D];
-    LOG(OUTPUT_DEBUG, "In C++: transforming input data...");
+
     // always return 1
     int maxR = initialize_func(N, D, maxK, missing, X, C, B, theta, R, Fin, mu, w, s2Y);
 
-    LOG(OUTPUT_DEBUG, "Init step 1 done, maxR = %d", maxR);
-
-
-
-    //...............Inference Function.......................##
-    LOG(OUTPUT_DEBUG, "\nEntering C++: Running Inference Routine...\n");
-    double s2Rho;
-    if (Net[0] == 'w') {
-        s2Rho = 0.5;
-    } else {
-        s2Rho = 0.0025;
-    }
-
+    LOG(OUTPUT_DEBUG, "Initialize done, maxR = %d", maxR);
 
     int Kest = IBPsampler_func(missing, X, C, Net, Z, B, theta,
                                H, A, R, &Fin[0], F, &mu[0], &w[0],
                                maxR, bias, N, D, K, alpha, s2B, &s2Y[0], s2Rho, s2H, s2u, maxK, Nsim);
-    LOG(OUTPUT_DEBUG, "\nBack to Python: OK\n");
+    LOG(OUTPUT_DEBUG, "\nExit IBP sampler\n");
 
 
 
@@ -153,7 +140,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     }
 
 
-    LOG(OUTPUT_DEBUG, "Kest=%d, N=%d\n", Kest, N);
+    LOG(OUTPUT_DEBUG, "Kest = %d, N = %d\n", Kest, N);
 
 
     for (int i = 0; i < N; i++) {
@@ -161,16 +148,15 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
             Z_out[k][i] = gsl_matrix_get(Z, k, i);
         }
     }
-
+    gsl_matrix_free(Z);
+    LOG(OUTPUT_DEBUG, "Z_out loaded");
 
     for (int i = 0; i < Kest; i++) {
         for (int k = 0; k < Kest; k++) {
             H_out[k][i] = gsl_matrix_get(H, k, i);
         }
     }
-
-
-    LOG(OUTPUT_DEBUG, "Z_out loaded");
+    gsl_matrix_free(H);
 
 
     gsl_matrix_view Bd_view;
@@ -212,14 +198,13 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     LOG(OUTPUT_DEBUG, "theta_out loaded");
 
 
-    //..... Free memory.....
+    // free memory
     for (int d = 0; d < D; d++) {
         gsl_matrix_free(B[d]);
         if (C[d] == 'o') {
             gsl_vector_free(theta[d]);
         }
     }
-    gsl_matrix_free(Z);
 
     delete[] C;
     delete[] R;

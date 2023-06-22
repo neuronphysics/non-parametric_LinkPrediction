@@ -104,10 +104,10 @@ void setUpCUDA(double *L, double *iL, int matSize) {
 
     // L^(-1)
     for (int i = 0; i < matSize; i++) {
-        nodiag_normalize << < numBlocks, threadsPerBlock >> >(d_A, dI, matSize, i);
-        diag_normalize << < numBlocks, threadsPerBlock >> >(d_A, dI, matSize, i);
-        gaussjordan << < numBlocks, threadsPerBlock >> >(d_A, dI, matSize, i);
-        set_zero << < numBlocks, threadsPerBlock >> >(d_A, dI, matSize, i);
+        nodiag_normalize <<< numBlocks, threadsPerBlock >>>(d_A, dI, matSize, i);
+        diag_normalize <<< numBlocks, threadsPerBlock >>>(d_A, dI, matSize, i);
+        gaussjordan <<< numBlocks, threadsPerBlock >>>(d_A, dI, matSize, i);
+        set_zero <<< numBlocks, threadsPerBlock >>>(d_A, dI, matSize, i);
     }
 
     cudaEventRecord(stop, 0);
@@ -250,7 +250,8 @@ void parseGslMatrix(double *in, const gsl_matrix *original, CBLAS_TRANSPOSE_t tr
 
 
 void
-gpuMatrixMultiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double scale1, double scale2, CBLAS_TRANSPOSE_t transA,
+gpuMatrixMultiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, double scale1, double scale2,
+                  CBLAS_TRANSPOSE_t transA,
                   CBLAS_TRANSPOSE_t transB) {
     auto *inputA = new double[A->size1 * A->size2];
     auto *inputB = new double[B->size1 * B->size2];
@@ -283,209 +284,97 @@ gpuMatrixMultiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, doubl
 }
 
 
-__global__
-void Transpose(float *matrix, float *t_matrix, int N) {
+__global__ void
+KronDevice(double *A, double *B, double *out, int Arow, int Acol, int Brow, int Bcol, int Rrow, int Rcol) {
+    int Row = blockIdx.y * TILE_DIM + threadIdx.y;
+    int Col = blockIdx.x * TILE_DIM + threadIdx.x;
 
-    int i = blockIdx.x * blockDim.x + threadIdx.x; //index row
-    int j = blockIdx.y * blockDim.y + threadIdx.y; //index col
-    int stride = gridDim.x * blockDim.x;
-
-    while (i < N && j < N) {
-        while (j < N && i < N) { // loop in case memory is not enough to do it one shot
-            t_matrix[i * N + j] = matrix[j * N + i];
-            j += stride;
-        }
-        j = blockIdx.y * blockDim.y + threadIdx.y;
-        i += stride;
-    }
-    return;
-}
-
-
-__global__
-void Matrix_Mul(float *matrix_1, float *matrix_2, float *matrix_m, int N) {
-    int i = blockIdx.y * blockDim.y + threadIdx.y;
-    int j = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i > N || j > N) return;
-    for (int k = 0; k < N; ++k) {
-        matrix_m[i * N + j] += (matrix_1[i * N + k]) * (matrix_2[k * N + j]);
-    }
-}
-
-
-// Function to get cofactor
-void getCofactor(float *A, float *temp, int p, int q, int n, int N) {
-    int i = 0, j = 0;
-
-    // Looping for each element of the matrix
-    for (int row = 0; row < n; row++) {
-        for (int col = 0; col < n; col++) {
-            // Copying into temporary matrix only those element
-            // which are not in given row and column
-            if (row != p && col != q) {
-                temp[i * N + j++] = A[row * N + col];
-
-                // Row is filled, so increase row index and
-                // reset col index
-                if (j == n - 1) {
-                    j = 0;
-                    i++;
-                }
+    if ((Row < Arow) && (Col < Acol)){
+        double factor = A[Row * Acol + Col];
+        int outR = Row * Brow;
+        int outC = Col * Bcol;
+        for(int i = 0; i < Brow; i++){
+            for(int j = 0; j < Bcol; j++){
+                out[(outR + i) * Rcol + outC + j] = factor * B[i * Bcol + j];
             }
         }
     }
+
 }
 
-// Recursive function for finding determinant of matrix.
-int determinant(float *A, int n, int N) {
-    int D = 0; // Initialize result
 
-    // Base case : if matrix contains single element
-    if (n == 1)
-        return A[0];
+void kron(double *A, double *B, double *out, int Arow, int Acol, int Brow, int Bcol) {
 
-    auto *temp = new float [N * N]; // To store cofactors
+    int Asize = Arow * Acol;
+    int Bsize = Brow * Bcol;
+    cudaError_t err;
 
-    int sign = 1; // To store sign multiplier
+    dim3 dimBlock(TILE_DIM, TILE_DIM, 1);
+    dim3 dimGrid;
 
-    // Iterate for each element of first row
-    for (int f = 0; f < n; f++) {
-        // Getting Cofactor of A[0][f]
-        getCofactor(A, temp, 0, f, n, N);
-        D += sign * A[0 * N + f] * determinant(temp, n - 1, N);
+    dimGrid.x = (Acol + dimBlock.x - 1) / dimBlock.x;
+    dimGrid.y = (Arow + dimBlock.y - 1) / dimBlock.y;
 
-        // terms are to be added with alternate sign
-        sign = -sign;
+    double *deviceA, *deviceB, *deviceC;
+
+    err = cudaMalloc((void **) &deviceA, Asize * sizeof(double));
+    if (err != cudaSuccess) {
+        cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
+    }
+    err = cudaMalloc((void **) &deviceB, Bsize * sizeof(double));
+    if (err != cudaSuccess) {
+        cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
+    }
+    err = cudaMalloc((void **) &deviceC, Asize * Bsize * sizeof(double));
+    if (err != cudaSuccess) {
+        cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
     }
 
-    delete[] temp;
-    return D;
+    err = cudaMemcpy(deviceA, A, Asize * sizeof(double), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
+    }
+    err = cudaMemcpy(deviceB, B, Bsize * sizeof(double), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
+    }
+    err = cudaMemcpy(deviceC, out, Asize * Bsize * sizeof(double), cudaMemcpyHostToDevice);
+    if (err != cudaSuccess) {
+        cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
+    }
+
+    KronDevice<<<dimGrid, dimBlock>>>(deviceA, deviceB, deviceC, Arow, Acol, Brow, Bcol, Arow * Brow, Acol * Bcol);
+
+    err = cudaMemcpy(out, deviceC, Asize * Bsize * sizeof(double), cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess) {
+        cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
+    }
+
+    cudaFree(deviceA);
+    cudaFree(deviceB);
+    cudaFree(deviceC);
 }
 
-// Function to get adjoint
-void adjoint(float *A, float *adj, int N) {
-    if (N == 1) {
-        adj[0] = 1;
-        return;
-    }
+void
+gpuKron(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *Res) {
+    auto *inputA = new double[A->size1 * A->size2];
+    auto *inputB = new double[B->size1 * B->size2];
+    auto *output = new double[Res->size1 * Res->size2];
 
-    // temp is used to store cofactors
-    int sign = 1;
-    auto *temp = new float [N * N];
 
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            // Get cofactor
-            getCofactor(A, temp, i, j, N, N);
+    parseGslMatrix(inputA, A, CBLAS_TRANSPOSE::CblasNoTrans);
+    parseGslMatrix(inputB, B, CBLAS_TRANSPOSE::CblasNoTrans);
 
-            // sign of adj positive if sum of row
-            // and column indexes is even.
-            sign = ((i + j) % 2 == 0) ? 1 : -1;
 
-            // Interchanging rows and columns to get the
-            // transpose of the cofactor matrix
-            adj[j * N + i] = (sign) * (determinant(temp, N - 1, N));
+    kron(inputA, inputB, output, (int) (A->size1), (int) (A->size2), (int) (B->size1), int(B->size2));
+
+    for (int i = 0; i < Res->size1; i++) {
+        for (int j = 0; j < Res->size2; j++) {
+            gsl_matrix_set(Res, i, j, output[i * Res->size2 + j]);
         }
     }
 
-    delete[] temp;
+    delete[] inputA;
+    delete[] inputB;
+    delete[] output;
 }
-
-// Function to calculate and store inverse, returns false if
-// matrix is singular
-bool inverse(float *A, float *inverse, int N) {
-    // Find determinant of A[][]
-    int det = determinant(A, N, N);
-    if (det == 0) {
-        cout << "Singular matrix, can't find its inverse";
-        return false;
-    }
-
-    // Find adjoint
-    float * adj = new float [N * N];
-    adjoint(A, adj, N);
-
-    // Find Inverse using formula "inverse(A) = adj(A)/det(A)"
-    for (int i = 0; i < N; i++)
-        for (int j = 0; j < N; j++)
-            inverse[i * N + j] = adj[i * N + j] / float(det);
-
-    delete[] adj;
-    return true;
-}
-
-
-void gpuInverseMethod2(gsl_matrix *original, gsl_matrix *inverseM) {
-    size_t matrixSize = original->size1;
-
-    auto *in = new float[matrixSize * matrixSize];
-    auto *out = new float[matrixSize * matrixSize];
-
-    for (int i = 0; i < matrixSize; i++) {
-        for (int j = 0; j < matrixSize; j++) {
-            in[i * matrixSize + j] = (float) gsl_matrix_get(original, i, j);
-        }
-    }
-
-
-    float *t_matrix, *in_matrix, *d_matrix_mult, *d_inv, *d_out;
-    cudaMalloc((void **) &t_matrix, matrixSize * matrixSize * sizeof(float ));
-    cudaMalloc((void **) &in_matrix, matrixSize * matrixSize * sizeof(float ));
-    cudaMalloc((void **) &d_matrix_mult, matrixSize * matrixSize * sizeof(float ));
-    cudaMalloc((void **) &d_inv, matrixSize * matrixSize * sizeof(float ));
-    cudaMalloc((void **) &d_out, matrixSize * matrixSize * sizeof(float ));
-
-
-
-    float *matrix_mult = new float[matrixSize * matrixSize];
-    float *adj = new float[matrixSize * matrixSize]; // To store adjoint
-    float *inv = new float[matrixSize * matrixSize];
-
-    cudaMemcpy(in_matrix, in, matrixSize * matrixSize, cudaMemcpyHostToDevice);
-
-    Transpose<<<8, 128>>>(in_matrix, t_matrix, matrixSize);
-
-
-    Matrix_Mul<<<8, 128>>>(t_matrix, in_matrix, d_matrix_mult, matrixSize);
-
-
-    cudaMemcpy(matrix_mult, d_matrix_mult, matrixSize * matrixSize, cudaMemcpyDeviceToHost);
-
-
-
-    inverse(matrix_mult, inv, matrixSize);
-
-
-    cudaMemcpy(d_inv, inv, matrixSize * matrixSize, cudaMemcpyHostToDevice);
-
-
-    Matrix_Mul<<<8, 128>>>(d_inv, t_matrix, d_out, matrixSize);
-
-
-    cudaMemcpy(out, d_out, matrixSize * matrixSize, cudaMemcpyDeviceToHost);
-
-
-    delete[] matrix_mult;
-    delete[] adj;
-    delete[] inv;
-
-    cudaFree(t_matrix);
-    cudaFree(in_matrix);
-    cudaFree(d_matrix_mult);
-    cudaFree(d_inv);
-    cudaFree(d_out);
-
-    for (int i = 0; i < matrixSize; i++) {
-        for (int j = 0; j < matrixSize; j++) {
-            gsl_matrix_set(inverseM, i, j, out[i * matrixSize + j]);
-        }
-    }
-
-    delete[] in;
-    delete[] out;
-}
-
-
-
-
-

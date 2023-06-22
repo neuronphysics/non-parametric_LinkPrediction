@@ -26,7 +26,7 @@ int getArraySize(const string &s, const int s_length) {
 }
 
 
-int main(int argc, char** argv) {
+int main() {
     LOG(OUTPUT_NORMAL, "Version description:")
     LOG(OUTPUT_NORMAL, VERSION_DECLARE)
 
@@ -34,7 +34,7 @@ int main(int argc, char** argv) {
     int N;
     int D;
     // k need to be larger than 1
-    int K = 3;
+    int K = 10;
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     double missing = -1;
 
     // ---------------------------------- Load data from txt file -------------------------------------
-    init_util_functions(argv[0]);
+    init_util_functions("200");
 
 
     string dataSetName = "_200_4";

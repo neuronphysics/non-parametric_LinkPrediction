@@ -26,7 +26,7 @@ int getArraySize(const string &s, const int s_length) {
 }
 
 
-int main(int argc, char** argv) {
+int main() {
     LOG(OUTPUT_NORMAL, "Version description:")
     LOG(OUTPUT_NORMAL, VERSION_DECLARE)
 
@@ -46,7 +46,7 @@ int main(int argc, char** argv) {
     double missing = -1;
 
     // ---------------------------------- Load data from txt file -------------------------------------
-    init_util_functions(argv[0]);
+    init_util_functions("800");
 
 
     string dataSetName = "";

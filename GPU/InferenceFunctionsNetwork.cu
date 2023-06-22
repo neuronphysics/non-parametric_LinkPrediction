@@ -1,14 +1,7 @@
 #include "InferenceFunctionsNetwork.h"
 
 using namespace std;
-//**********************************************************************************************************************//
-//**********************************************************************************************************************//
-//
-//Authors: This code is originally developed by Isabel Valera for the "General latent feature models for heterogeneous dataset" paper
-//It has been modified by Zahra Sheikhbahaee to take into account the network data. In new version, there are two pseudo likelihood, one is related to the heterogeneous attribute data and the other belongs to the adjacency matrix and we posit that there is an affinity matrix which takes into account the degree of homophily/heterophily between the latent communities (features)......
-//
-//**********************************************************************************************************************//
-//**********************************************************************************************************************//
+
 
 void
 SampleY(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2Y, double s2u,
@@ -666,7 +659,7 @@ int IBPsampler_func(double missing,     // how the missing data is defined
         P_view = gsl_matrix_submatrix(P, 0, 0, Kest, Kest);
         gsl_matrix *S = gsl_matrix_calloc(Kest, Kest);
         gsl_matrix_memcpy(S, &P_view.matrix);
-        inverse(S, Kest);
+        inverse(S);
         gsl_matrix *MuB = gsl_matrix_calloc(Kest, 1);
 
         for (int d = 0; d < D; d++) {
