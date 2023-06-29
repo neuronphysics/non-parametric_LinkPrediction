@@ -1,3 +1,4 @@
+#include <cusolverDn.h>
 #include "GpuAcc.h"
 
 using namespace std;
@@ -59,13 +60,10 @@ __global__ void set_zero(double *A, double *I, int n, int i) {
 
 
 void setUpCUDA(double *L, double *iL, int matSize) {
-
     double *d_A, *d_L, *I, *dI;
     float time;
     cudaError_t err;
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
+
     int ddsize = matSize * matSize * sizeof(double);
 
     dim3 threadsPerBlock(blocksize, blocksize);
@@ -99,9 +97,6 @@ void setUpCUDA(double *L, double *iL, int matSize) {
         cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
     }
 
-    //timer start
-    cudaEventRecord(start, 0);
-
     // L^(-1)
     for (int i = 0; i < matSize; i++) {
         nodiag_normalize <<< numBlocks, threadsPerBlock >>>(d_A, dI, matSize, i);
@@ -110,19 +105,12 @@ void setUpCUDA(double *L, double *iL, int matSize) {
         set_zero <<< numBlocks, threadsPerBlock >>>(d_A, dI, matSize, i);
     }
 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&time, start, stop);
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-
     //copy data from GPU to CPU
     err = cudaMemcpy(iL, dI, ddsize, cudaMemcpyDeviceToHost);
     if (err != cudaSuccess) {
         cout << cudaGetErrorString(err) << " in " << __FILE__ << " at line " << __LINE__ << endl;
     }
 
-//    cout << "Cuda Time - inverse: " << time << "ms\n";
 
     cudaFree(d_A);
     cudaFree(dI);
@@ -377,4 +365,168 @@ gpuKron(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *Res) {
     delete[] inputA;
     delete[] inputB;
     delete[] output;
+}
+
+
+void symmetricAndPDMatrixInverse(gsl_matrix * matrix){
+    int N = matrix->size1;
+
+    // identity matrix
+    auto *h_I = (double *)malloc(N * N * sizeof(double));
+    for(int i = 0; i < N; i++){
+        for(int j = 0; j < N ;j++){
+            if(i == j){
+                h_I[i * N + j] = 1;
+            } else {
+                h_I[i * N + j] = 0;
+            }
+        }
+    }
+
+    double *d_I;
+    cudaMalloc(&d_I, N * N * sizeof(double));
+
+    // Move the relevant matrix from host to device
+    cudaMemcpy(d_I, h_I, N * N * sizeof(double), cudaMemcpyHostToDevice);
+
+
+    // --- CUDA solver initialization
+    cusolverDnHandle_t solver_handle;
+    cusolverDnCreate(&solver_handle);
+
+    // --- CUBLAS initialization
+    cublasHandle_t cublas_handle;
+    cublasCreate(&cublas_handle);
+
+
+    // Setting the host, N x N matrix
+    auto *h_A = (double *)malloc(N * N * sizeof(double));
+    parseGslMatrix(h_A, matrix, CblasNoTrans);
+
+    // Allocate device space for the input matrix
+    double *d_A;
+    cudaMalloc(&d_A, N * N * sizeof(double));
+
+    // Move the relevant matrix from host to device
+    cudaMemcpy(d_A, h_A, N * N * sizeof(double), cudaMemcpyHostToDevice);
+
+
+
+    // COMPUTING THE CHOLESKY DECOMPOSITION
+
+    // --- cuSOLVE input/output parameters/arrays
+    int work_size = 0;
+    int *devInfo;
+    cudaMalloc(&devInfo, sizeof(int));
+
+    // --- CUDA CHOLESKY initialization
+    cusolverDnDpotrf_bufferSize(solver_handle, CUBLAS_FILL_MODE_LOWER, N, d_A, N, &work_size);
+
+    // --- CUDA POTRF execution
+    double *work;
+    cudaMalloc(&work, work_size * sizeof(double));
+
+    cusolverDnDpotrf(solver_handle, CUBLAS_FILL_MODE_LOWER, N, d_A, N, work, work_size, devInfo);
+    int devInfo_h = 0;
+    cudaMemcpy(&devInfo_h, devInfo, sizeof(int), cudaMemcpyDeviceToHost);
+    if (devInfo_h != 0) cout << "Unsuccessful potrf execution\n\n" << "devInfo = " << devInfo_h << "\n\n";
+
+    // --- At this point, the lower triangular of matrix is stored in d_A, and it is a unit triangular matrix.
+    const double alpha = 1.f;
+    const double beta = 0;
+    // solve L ^ -1
+    cublasDtrsm(cublas_handle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, N, N, &alpha, d_A, N, d_I, N);
+
+    // by here d_I contain L^-1, copy it to d_A
+    cudaMemcpy(d_A, d_I, N * N * sizeof(double), cudaMemcpyDeviceToDevice);
+
+
+    // alloc device space for final result
+    double *d_R;
+    cudaMalloc(&d_R, N * N * sizeof(double));
+
+    // perform d_A^T * d_I = d_R
+    cublasDgemm(cublas_handle, CUBLAS_OP_T, CUBLAS_OP_N, N, N, N, &alpha, d_A, N, d_I, N, &beta, d_R, N);
+
+    // by here d_R contains matrix inverse
+    cudaMemcpy(h_A, d_R, N * N * sizeof(double), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            gsl_matrix_set(matrix, i, j, h_A[i * N + j]);
+        }
+    }
+
+    cusolverDnDestroy(solver_handle);
+    delete[] h_I;
+    delete[] h_A;
+    cudaFree(d_A);
+    cudaFree(d_I);
+    cudaFree(d_R);
+
+    cudaFree(work);
+    cudaFree(devInfo);
+}
+
+
+void gpuBoostedComputeFullEta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_matrix * etaKK){
+    int K = Z->size1;
+    int N = Z->size2;
+
+    // --- CUDA solver initialization
+    cusolverDnHandle_t solver_handle;
+    cusolverDnCreate(&solver_handle);
+
+    // --- CUBLAS initialization
+    cublasHandle_t cublas_handle;
+    cublasCreate(&cublas_handle);
+
+
+    // prepare Z
+    auto *h_Z = (double *)malloc(K * N * sizeof(double));
+    parseGslMatrix(h_Z, Z, CblasNoTrans);
+    double *d_Z;
+    cudaMalloc(&d_Z, K * N * sizeof(double));
+    cudaMemcpy(d_Z, h_Z, K * N * sizeof(double), cudaMemcpyHostToDevice);
+
+    // prepare Rho
+    auto *h_R = (double *)malloc(N * N * sizeof(double));
+    parseGslMatrix(h_R, Rho, CblasNoTrans);
+    double *d_R;
+    cudaMalloc(&d_R, N * N * sizeof(double));
+    cudaMemcpy(d_R, h_R, N * N * sizeof(double), cudaMemcpyHostToDevice);
+
+    // prepare intermediate var
+    double * d_zR;
+    cudaMalloc(&d_zR, K * N * sizeof(double));
+
+    // prepare final res
+    auto *h_E = (double *)malloc(K * K * sizeof(double));
+    double *d_E;
+    cudaMalloc(&d_E, K * K * sizeof(double));
+
+    double alpha = 1.0;
+    double beta = 0;
+
+
+    multiplyAndPlus(K, N, N, 1, 0, d_Z, d_R, d_zR);
+    cublasDgemm(cublas_handle, CUBLAS_OP_T, CUBLAS_OP_N, K, K, N, &alpha, d_zR, N, d_Z, N, &beta, d_E, K);
+
+
+    cudaMemcpy(h_E, d_E, K * K * sizeof(double), cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < K; i++) {
+        for (int j = 0; j < K; j++) {
+            gsl_matrix_set(etaKK, i, j, h_E[i * K + j]);
+        }
+    }
+
+    cusolverDnDestroy(solver_handle);
+    delete[] h_Z;
+    delete[] h_R;
+    delete[] h_E;
+    cudaFree(d_Z);
+    cudaFree(d_R);
+    cudaFree(d_zR);
+    cudaFree(d_E);
 }

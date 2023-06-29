@@ -10,8 +10,8 @@ find_package(GSL REQUIRED)
 target_link_libraries(glfm_cuda_acc GSL::gsl GSL::gslcblas)
 
 
-find_package(CUDA)
-target_link_libraries(glfm_cuda_acc ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES})
+find_package(CUDAToolkit)
+target_link_libraries(glfm_cuda_acc ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES} CUDA::cusolver)
 
 #set(CMAKE_CUDA_FLAGS "-lcudadevrt -lcublas_device -lcublas --ptxas-options=-v")
 

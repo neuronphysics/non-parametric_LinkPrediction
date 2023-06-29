@@ -80,6 +80,7 @@ void compute_inverse_Q_directly(int N, int K, const gsl_matrix *Z, double beta, 
 
 void normal_update_eta(const gsl_matrix *Znon, const gsl_matrix *Rho, int n, gsl_matrix *Enon);
 
+void compute_full_eta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_matrix * eta);
 
 
 void init_util_functions(const std::string &exeName);
@@ -100,8 +101,5 @@ void print_matrix(const gsl_matrix **matrix, const std::string &name, int rowNum
 
 void print_matrix(const gsl_matrix *matrix, const std::string &name, size_t entryPerRow = 0);
 
-
-
-
-void quick_update_eta(const gsl_matrix *Z, const gsl_matrix *Rho, int n, gsl_matrix *Enon);
+void matrix_compare(const gsl_matrix *A, const gsl_matrix *B);
 #endif

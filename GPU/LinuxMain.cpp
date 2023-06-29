@@ -46,11 +46,8 @@ int main() {
     double missing = -1;
 
     // ---------------------------------- Load data from txt file -------------------------------------
-    init_util_functions("800");
-
-
     string dataSetName = "";
-
+    init_util_functions(dataSetName);
     string filePath = R"(dataSet/)";
     string adjFileName = "Adjacency_matrix";
     string attrFileName = "Attribute_matrix";

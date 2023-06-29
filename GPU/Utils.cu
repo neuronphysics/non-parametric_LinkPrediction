@@ -249,8 +249,8 @@ int mnrnd(double *p, int nK) {
  * @param K Input, matrix size
  * @param seed Input, random number generator seed
  */
-void mvnrnd(gsl_vector *v, gsl_matrix * matrix, gsl_vector *mu, int K, const gsl_rng *seed) {
-    gsl_matrix * matrixCopy = gsl_matrix_calloc(K, K);
+void mvnrnd(gsl_vector *v, gsl_matrix *matrix, gsl_vector *mu, int K, const gsl_rng *seed) {
+    gsl_matrix *matrixCopy = gsl_matrix_calloc(K, K);
     gsl_matrix_memcpy(matrixCopy, matrix);
 
     // decompose matrix_copy to LL^T = matrix, lower matrix
@@ -336,8 +336,6 @@ void kron_parallel(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b, s
  * @param b Input, matrix B
  */
 void gsl_Kronecker_product(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b) {
-    chrono::steady_clock::time_point begin = chrono::steady_clock::now();
-
     if (a->size2 || b->size2 > 600) {
         thread t1(kron_parallel, prod, a, b, 0, a->size2 / 3);
         thread t2(kron_parallel, prod, a, b, a->size2 / 3, a->size2 / 3 * 2);
@@ -348,9 +346,6 @@ void gsl_Kronecker_product(gsl_matrix *prod, const gsl_matrix *a, const gsl_matr
     } else {
         kron_parallel(prod, a, b, 0, a->size2);
     }
-
-    chrono::steady_clock::time_point end = chrono::steady_clock::now();
-    LOG(OUTPUT_DEBUG, "Kronecker cost = %lld [ms]", chrono::duration_cast<chrono::milliseconds>(end - begin).count())
 }
 
 /**
@@ -418,17 +413,22 @@ void remove_col(int K, int N, int i, gsl_matrix *out, gsl_matrix *in) {
  * @param Q Output, stores the new Q matrix
  */
 void compute_inverse_Q_directly(int N, int K, const gsl_matrix *Z, double beta, gsl_matrix *Q) {
-    // it cleans Q to identity matrix
-    gsl_matrix_set_identity(Q);
-    gsl_matrix *S = gsl_matrix_calloc(K * K, N * N);
+    gsl_matrix *identity = gsl_matrix_calloc(K * K, K * K);
+    gsl_matrix_set_identity(identity);
+    gsl_matrix_scale(identity, beta);
 
-    gsl_Kronecker_product(S, Z, Z);
+    gsl_matrix *zzT = gsl_matrix_calloc(K, K);
+    matrix_multiply(Z, Z, zzT, 1, 0, CblasNoTrans, CblasTrans);
 
-    // Q = s * s + beta * I
-    matrix_multiply(S, S, Q, 1, beta, CblasNoTrans, CblasTrans);
+    gsl_Kronecker_product(Q, zzT, zzT);
+    gsl_matrix_add(Q, identity);
 
-    inverse(Q);
-    gsl_matrix_free(S);
+    // Q = zz^T Kron zz^T + beta * I
+    gsl_matrix_free(identity);
+    gsl_matrix_free(zzT);
+
+
+    symmetricAndPDMatrixInverse(Q);
 }
 
 /**
@@ -459,41 +459,6 @@ void normal_update_eta(const gsl_matrix *Znon, const gsl_matrix *Rho, int n, gsl
     gsl_matrix_free(vecRho_n_n);
 }
 
-/**
- * An attempt to make Eta update faster, but currently not working
- * @param Znon Input, Z matrix without nth column
- * @param Rho Input, Rho matrix, will be used to compute Rho without nth row and column
- * @param n Input, the index of the Zn column that is removed from Z matrix
- * @param Enon Output, stores the output of (Znon Kron Znon) * vec(Rho_n_n)
- */
-void quick_update_eta(const gsl_matrix *Z, const gsl_matrix *Rho, int n, gsl_matrix *Enon) {
-
-    gsl_matrix *Zcopy = gsl_matrix_calloc(Z->size1, Z->size2);
-    gsl_matrix *RhoCopy = gsl_matrix_calloc(Rho->size1, Rho->size2);
-    gsl_matrix *ZKZ = gsl_matrix_calloc(Z->size1 * Z->size1, Z->size2 * Z->size2);
-    gsl_matrix *vecRho = gsl_matrix_calloc(Rho->size1 * Rho->size2, 1);
-
-    gsl_matrix_memcpy(RhoCopy, Rho);
-    gsl_matrix_memcpy(Zcopy, Z);
-
-    for (int i = 0; i < Zcopy->size1; i++) {
-        gsl_matrix_set(Zcopy, i, n, 0);
-    }
-
-    for (int i = 0; i < RhoCopy->size1; i++) {
-        gsl_matrix_set(RhoCopy, i, n, 0);
-        gsl_matrix_set(RhoCopy, n, i, 0);
-    }
-
-    gsl_Kronecker_product(ZKZ, Zcopy, Zcopy);
-    gsl_matrix2vector(vecRho, RhoCopy);
-    matrix_multiply(ZKZ, vecRho, Enon, 1, 0, CblasNoTrans, CblasNoTrans);
-
-    gsl_matrix_free(RhoCopy);
-    gsl_matrix_free(Zcopy);
-    gsl_matrix_free(ZKZ);
-    gsl_matrix_free(vecRho);
-}
 
 /**
  * Generate random number in range 0 to 1
@@ -577,4 +542,40 @@ void init_util_functions(const string &exeName) {
     timeSeed = chrono::high_resolution_clock::now().time_since_epoch().count();
     string fileName = exeName.substr(0, exeName.find('.'));
     matrixOut.open(fileName + "_matrix_log");
+}
+
+
+void matrix_compare(const gsl_matrix *A, const gsl_matrix *B) {
+    for (int i = 0; i < A->size1; i++) {
+        for (int j = 0; j < A->size2; j++) {
+            if (abs(gsl_matrix_get(A, i, j) - gsl_matrix_get(B, i, j)) > 0.0000001) {
+                cout << "different res at " << "[" << to_string(i) << "," << to_string(j) << "]  "
+                     << to_string(gsl_matrix_get(A, i, j)) << "  "
+                     << to_string(gsl_matrix_get(B, i, j)) << endl;
+            }
+        }
+    }
+}
+
+void compute_full_eta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_matrix *eta) {
+    gsl_matrix *etaKK = gsl_matrix_calloc(Z->size1, Z->size1);
+
+
+    gsl_matrix *zR = gsl_matrix_calloc(Z->size1, Z->size2);
+    matrix_multiply(Z, Rho, zR, 1, 0, CblasNoTrans, CblasNoTrans);
+    matrix_multiply(zR, Z, etaKK, 1, 0, CblasNoTrans, CblasTrans);
+
+
+    gpuBoostedComputeFullEta(Z, Rho, etaKK);
+
+
+    gsl_matrix_free(zR);
+
+
+    for (int i = 0; i < etaKK->size1; i++) {
+        for (int j = 0; j < etaKK->size2; j++) {
+            gsl_matrix_set(eta, i * etaKK->size2 + j, 0, gsl_matrix_get(etaKK, i, j));
+        }
+    }
+    gsl_matrix_free(etaKK);
 }

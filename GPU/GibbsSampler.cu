@@ -844,11 +844,40 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
 
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
 
+
+
+        end = chrono::steady_clock::now();
+        LOG(OUTPUT_DEBUG, "Update full Q cost = %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        middle = end;
+
+
+
         // compute full eta
         ZoZ = gsl_matrix_calloc(K * K, N * N);
         gsl_Kronecker_product(ZoZ, &Z_view.matrix, &Z_view.matrix);
         matrix_multiply(ZoZ, vecRho, &Enon_view.matrix, 1, 0, CblasNoTrans, CblasNoTrans);
         gsl_matrix_memcpy(eta, etanon);
+
+
+        end = chrono::steady_clock::now();
+        LOG(OUTPUT_DEBUG, "Update full Eta cost = %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        middle = end;
+
+
+        // todo test new eta computation method
+        gsl_matrix * eta_new_method = gsl_matrix_calloc(eta->size1, eta->size2);
+        compute_full_eta(&Z_view.matrix, Rho, eta_new_method);
+        gsl_matrix_free(eta_new_method);
+
+
+        end = chrono::steady_clock::now();
+        LOG(OUTPUT_DEBUG, "Update full Eta new method cost = %lld [ms]",
+            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
+        middle = end;
+
+
 
         gsl_matrix_free(ZoZ);
         delete[] p;
