@@ -86,7 +86,6 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                      double s2Rho,      //**** noise variance of the pseudo-observation of the adjacency matrix
                      gsl_matrix **Y,    //The pseudo-observation matrix of the affinity matrix (the auxiliary Gaussian variable)
                      gsl_matrix *Rho,//**** The pseudo-observation matrix of the adjacency matrix,
-                     gsl_matrix *vecRho,
                      gsl_matrix *Z,     // The IBP latent matrix
                      int *nest,         //m_{-n,k}
                      gsl_matrix *P,     //P = Z^T Z + 1./s2B
@@ -96,9 +95,7 @@ int AcceleratedGibbs(int maxK,          //Maximum number of latent features
                      gsl_matrix *Q,      //**** Q_{K2xK2}=[(S^T S) + s2Rho/s2H]^{-1}]
                      gsl_matrix *Qnon,   //**** Q_{-n} = [Q^{-1} - (S_{n}^T S_{n})]^{-1}
                      gsl_matrix *eta, //***eta_{K2x1}=(Z kron Z)^T vec(Rho)
-                     gsl_matrix *etanon,//***etanon_{K2x1}=(Znon kron Znon) vec(Rhonon)
-                     double *ldet_Q,
-                     double *ldet_Q_n
+                     gsl_matrix *etanon//***etanon_{K2x1}=(Znon kron Znon) vec(Rhonon)
 );
 
 #endif //GLFM_CUDA_ACC_GIBBSSAMPLER_CUH

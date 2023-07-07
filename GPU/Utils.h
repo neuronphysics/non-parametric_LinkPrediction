@@ -82,6 +82,9 @@ void normal_update_eta(const gsl_matrix *Znon, const gsl_matrix *Rho, int n, gsl
 
 void compute_full_eta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_matrix * eta);
 
+void rank_one_update_eta(int K, int N, int n, gsl_matrix *Z, gsl_matrix *zn, gsl_matrix *Rho, gsl_matrix *Eta,
+                         gsl_matrix *Etanon);
+
 
 void init_util_functions(const std::string &exeName);
 

@@ -4,7 +4,7 @@ project(glfm_cuda_acc CUDA)
 set(CMAKE_CUDA_STANDARD 14)
 enable_language(CXX CUDA)
 
-add_executable(glfm_cuda_acc WinMain.cpp ExtendFunction.cu Utils.cu InferenceFunctionsNetwork.cu GpuAcc.cu Log.h GibbsSampler.cu GibbsSampler.cuh Decrypted_Utils.cpp Decrypted_Utils.h)
+add_executable(glfm_cuda_acc WinMain.cpp ExtendFunction.cu Utils.cu InferenceFunctionsNetwork.cu GpuAcc.cu Log.h GibbsSampler.cu GibbsSampler.cuh Deprecated_Utils.cpp Deprecated_Utils.h)
 
 find_package(GSL REQUIRED)
 target_link_libraries(glfm_cuda_acc GSL::gsl GSL::gslcblas)
@@ -12,9 +12,6 @@ target_link_libraries(glfm_cuda_acc GSL::gsl GSL::gslcblas)
 
 find_package(CUDAToolkit)
 target_link_libraries(glfm_cuda_acc ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES} CUDA::cusolver)
-
-#set(CMAKE_CUDA_FLAGS "-lcudadevrt -lcublas_device -lcublas --ptxas-options=-v")
-
 
 
 set_target_properties(glfm_cuda_acc PROPERTIES

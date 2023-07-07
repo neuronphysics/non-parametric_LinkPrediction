@@ -2,7 +2,7 @@
 // Created by su999 on 2023/6/22.
 //
 
-#include "Decrypted_Utils.h"
+#include "Deprecated_Utils.h"
 
 double fint_1(double x, double w, double theta_L, double theta_H) {
     return -1 / w * log((theta_H - x) / (x - theta_L));

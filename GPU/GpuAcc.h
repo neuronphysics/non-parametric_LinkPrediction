@@ -29,4 +29,9 @@ void symmetricAndPDMatrixInverse(gsl_matrix * matrix);
 
 void gpuBoostedComputeFullEta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_matrix * etaKK);
 
+void
+gpuBoostedEtaUpdate(int N, int K, const double *znkZ, const double *Zkzn, const double *znkzn,
+                    const gsl_matrix *rho_col, const gsl_matrix *rho_row,
+                    double rho_nn, const gsl_matrix *fullEta, gsl_matrix *etanon);
+
 #endif //GLFM_CUDA_ACC_GPUACC_H

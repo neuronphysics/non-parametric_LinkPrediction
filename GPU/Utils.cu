@@ -267,6 +267,7 @@ void mvnrnd(gsl_vector *v, gsl_matrix *matrix, gsl_vector *mu, int K, const gsl_
     gsl_vector_add(v, mu);
 
     // H = decomposition(Q) * normal distribution + Q * Eta
+    gsl_matrix_free(matrixCopy);
 }
 
 /**
@@ -336,7 +337,7 @@ void kron_parallel(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b, s
  * @param b Input, matrix B
  */
 void gsl_Kronecker_product(gsl_matrix *prod, const gsl_matrix *a, const gsl_matrix *b) {
-    if (a->size2 || b->size2 > 600) {
+    if (a->size2 > 600 || b->size2 > 600) {
         thread t1(kron_parallel, prod, a, b, 0, a->size2 / 3);
         thread t2(kron_parallel, prod, a, b, a->size2 / 3, a->size2 / 3 * 2);
         thread t3(kron_parallel, prod, a, b, a->size2 / 3 * 2, a->size2);
@@ -560,17 +561,7 @@ void matrix_compare(const gsl_matrix *A, const gsl_matrix *B) {
 void compute_full_eta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_matrix *eta) {
     gsl_matrix *etaKK = gsl_matrix_calloc(Z->size1, Z->size1);
 
-
-    gsl_matrix *zR = gsl_matrix_calloc(Z->size1, Z->size2);
-    matrix_multiply(Z, Rho, zR, 1, 0, CblasNoTrans, CblasNoTrans);
-    matrix_multiply(zR, Z, etaKK, 1, 0, CblasNoTrans, CblasTrans);
-
-
     gpuBoostedComputeFullEta(Z, Rho, etaKK);
-
-
-    gsl_matrix_free(zR);
-
 
     for (int i = 0; i < etaKK->size1; i++) {
         for (int j = 0; j < etaKK->size2; j++) {
@@ -578,4 +569,72 @@ void compute_full_eta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_matrix *et
         }
     }
     gsl_matrix_free(etaKK);
+}
+
+/**
+ * Helper function for parallelized kronecker product computation
+ * @param prod Output, stores the result of A kron B
+ * @param a Input, matrix A
+ * @param b Input, matrix B
+ * @param startJ Input, start index assigned to this thread
+ * @param endJ Input, end index assigned to this thread
+ */
+void kron_parallel_array(double *prod, const gsl_matrix *a, const gsl_matrix *b, size_t startJ, size_t endJ) {
+    unsigned prodWidth = a->size2 * b->size2;
+    for (unsigned int i = 0; i < a->size1; ++i) {
+        for (unsigned int j = startJ; j < endJ; ++j) {
+            double factor = gsl_matrix_get(a, i, j);
+            unsigned int prodBaseI = i * b->size1;
+            unsigned int prodBaseJ = j * b->size2;
+            for (unsigned int s = 0; s < b->size1; s++) {
+                for (unsigned int t = 0; t < b->size2; t++) {
+                    unsigned int prodI = prodBaseI + s;
+                    unsigned int prodJ = prodBaseJ + t;
+                    prod[prodI * prodWidth + prodJ] = factor * gsl_matrix_get(b, s, t);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Compute the Kronecker product of A and B
+ * @param prod Output, stores the result of A Kron B
+ * @param a Input, matrix A
+ * @param b Input, matrix B
+ */
+void kronecker_product_array(double *prod, const gsl_matrix *a, const gsl_matrix *b) {
+    if (a->size2 > 600 || b->size2 > 600) {
+        thread t1(kron_parallel_array, prod, a, b, 0, a->size2 / 3);
+        thread t2(kron_parallel_array, prod, a, b, a->size2 / 3, a->size2 / 3 * 2);
+        thread t3(kron_parallel_array, prod, a, b, a->size2 / 3 * 2, a->size2);
+        t1.join();
+        t2.join();
+        t3.join();
+    } else {
+        kron_parallel_array(prod, a, b, 0, a->size2);
+    }
+}
+
+
+void rank_one_update_eta(int K, int N, int n, gsl_matrix *Z, gsl_matrix *zn, gsl_matrix *Rho, gsl_matrix *Eta,
+                         gsl_matrix *Etanon) {
+    auto *znkZ = new double[N * K * K];
+    auto *Zkzn = new double[N * K * K];
+    auto *znkzn = new double[K * K];
+    kronecker_product_array(znkZ, zn, Z);
+    kronecker_product_array(Zkzn, Z, zn);
+    kronecker_product_array(znkzn, zn, zn);
+
+    // whole column
+    gsl_matrix_view rho_col = gsl_matrix_submatrix(Rho, 0, n, N, 1);
+    // whole row
+    gsl_matrix_view rho_row = gsl_matrix_submatrix(Rho, n, 0, 1, N);
+    double rho_nn = gsl_matrix_get(Rho, n, n);
+
+    gpuBoostedEtaUpdate(N, K, znkZ, Zkzn, znkzn, &rho_col.matrix, &rho_row.matrix, rho_nn, Eta, Etanon);
+
+    delete[] znkZ;
+    delete[] Zkzn;
+    delete[] znkzn;
 }

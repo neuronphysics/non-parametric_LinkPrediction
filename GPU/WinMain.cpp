@@ -25,6 +25,33 @@ int getArraySize(const string &s, const int s_length) {
     return counter;
 }
 
+void test() {
+    int N = 3;
+    int K = 2;
+    int n = 0;
+
+    gsl_matrix *Z = gsl_matrix_calloc(K, N);
+    gsl_matrix_set(Z, 0, 0, 0);
+    gsl_matrix_set(Z, 0, 1, 1);
+    gsl_matrix_set(Z, 0, 2, 1);
+    gsl_matrix_set(Z, 1, 0, 1);
+    gsl_matrix_set(Z, 1, 1, 0);
+    gsl_matrix_set(Z, 1, 2, 1);
+
+    gsl_matrix_view zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
+
+    gsl_matrix *Rho = gsl_matrix_calloc(N, N);
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            gsl_matrix_set(Rho, i, j, i * N + j + 1);
+        }
+    }
+
+    gsl_matrix * Eta = gsl_matrix_calloc(K * K, 1);
+    gsl_matrix * Etanon = gsl_matrix_calloc(K * K, 1);
+    rank_one_update_eta(K, N, n, Z, &zn.matrix, Rho, Eta, Etanon);
+}
+
 
 int main() {
     LOG(OUTPUT_NORMAL, "Version description:")
@@ -34,7 +61,7 @@ int main() {
     int N;
     int D;
     // k need to be larger than 1
-    int K = 4;
+    int K = 3;
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise
@@ -46,11 +73,8 @@ int main() {
     double missing = -1;
 
     // ---------------------------------- Load data from txt file -------------------------------------
-    init_util_functions("200");
-
-
-    string dataSetName = "_200_4";
-
+    string dataSetName = DATASET_NAME;
+    init_util_functions(dataSetName);
     string filePath = R"(E:\clion projects\glfm_cuda_acc\dataSet\)";
     string adjFileName = "Adjacency_matrix";
     string attrFileName = "Attribute_matrix";

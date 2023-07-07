@@ -2,8 +2,8 @@
 // Created by su999 on 2023/6/22.
 //
 
-#ifndef GLFM_CUDA_ACC_DECRYPTED_UTILS_H
-#define GLFM_CUDA_ACC_DECRYPTED_UTILS_H
+#ifndef GLFM_CUDA_ACC_DEPRECATED_UTILS_H
+#define GLFM_CUDA_ACC_DEPRECATED_UTILS_H
 
 #include "Utils.h"
 
@@ -36,4 +36,4 @@ double *column_to_row_major_order(double *A, int nRows, int nCols);
 
 double compute_matrix_max(double missing, gsl_matrix *v);
 
-#endif //GLFM_CUDA_ACC_DECRYPTED_UTILS_H
+#endif //GLFM_CUDA_ACC_DEPRECATED_UTILS_H

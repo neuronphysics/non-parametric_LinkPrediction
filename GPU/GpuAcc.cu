@@ -277,12 +277,12 @@ KronDevice(double *A, double *B, double *out, int Arow, int Acol, int Brow, int 
     int Row = blockIdx.y * TILE_DIM + threadIdx.y;
     int Col = blockIdx.x * TILE_DIM + threadIdx.x;
 
-    if ((Row < Arow) && (Col < Acol)){
+    if ((Row < Arow) && (Col < Acol)) {
         double factor = A[Row * Acol + Col];
         int outR = Row * Brow;
         int outC = Col * Bcol;
-        for(int i = 0; i < Brow; i++){
-            for(int j = 0; j < Bcol; j++){
+        for (int i = 0; i < Brow; i++) {
+            for (int j = 0; j < Bcol; j++) {
                 out[(outR + i) * Rcol + outC + j] = factor * B[i * Bcol + j];
             }
         }
@@ -368,14 +368,14 @@ gpuKron(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *Res) {
 }
 
 
-void symmetricAndPDMatrixInverse(gsl_matrix * matrix){
+void symmetricAndPDMatrixInverse(gsl_matrix *matrix) {
     int N = matrix->size1;
 
     // identity matrix
-    auto *h_I = (double *)malloc(N * N * sizeof(double));
-    for(int i = 0; i < N; i++){
-        for(int j = 0; j < N ;j++){
-            if(i == j){
+    auto *h_I = new double[N * N];
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            if (i == j) {
                 h_I[i * N + j] = 1;
             } else {
                 h_I[i * N + j] = 0;
@@ -400,7 +400,7 @@ void symmetricAndPDMatrixInverse(gsl_matrix * matrix){
 
 
     // Setting the host, N x N matrix
-    auto *h_A = (double *)malloc(N * N * sizeof(double));
+    auto *h_A = new double[N * N];
     parseGslMatrix(h_A, matrix, CblasNoTrans);
 
     // Allocate device space for the input matrix
@@ -435,7 +435,8 @@ void symmetricAndPDMatrixInverse(gsl_matrix * matrix){
     const double alpha = 1.f;
     const double beta = 0;
     // solve L ^ -1
-    cublasDtrsm(cublas_handle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, N, N, &alpha, d_A, N, d_I, N);
+    cublasDtrsm(cublas_handle, CUBLAS_SIDE_LEFT, CUBLAS_FILL_MODE_LOWER, CUBLAS_OP_N, CUBLAS_DIAG_NON_UNIT, N, N,
+                &alpha, d_A, N, d_I, N);
 
     // by here d_I contain L^-1, copy it to d_A
     cudaMemcpy(d_A, d_I, N * N * sizeof(double), cudaMemcpyDeviceToDevice);
@@ -458,6 +459,7 @@ void symmetricAndPDMatrixInverse(gsl_matrix * matrix){
     }
 
     cusolverDnDestroy(solver_handle);
+    cublasDestroy(cublas_handle);
     delete[] h_I;
     delete[] h_A;
     cudaFree(d_A);
@@ -469,7 +471,7 @@ void symmetricAndPDMatrixInverse(gsl_matrix * matrix){
 }
 
 
-void gpuBoostedComputeFullEta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_matrix * etaKK){
+void gpuBoostedComputeFullEta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_matrix *etaKK) {
     int K = Z->size1;
     int N = Z->size2;
 
@@ -483,25 +485,25 @@ void gpuBoostedComputeFullEta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_
 
 
     // prepare Z
-    auto *h_Z = (double *)malloc(K * N * sizeof(double));
+    auto *h_Z = new double[K * N];
     parseGslMatrix(h_Z, Z, CblasNoTrans);
     double *d_Z;
     cudaMalloc(&d_Z, K * N * sizeof(double));
     cudaMemcpy(d_Z, h_Z, K * N * sizeof(double), cudaMemcpyHostToDevice);
 
     // prepare Rho
-    auto *h_R = (double *)malloc(N * N * sizeof(double));
+    auto *h_R = new double[N * N];
     parseGslMatrix(h_R, Rho, CblasNoTrans);
     double *d_R;
     cudaMalloc(&d_R, N * N * sizeof(double));
     cudaMemcpy(d_R, h_R, N * N * sizeof(double), cudaMemcpyHostToDevice);
 
     // prepare intermediate var
-    double * d_zR;
+    double *d_zR;
     cudaMalloc(&d_zR, K * N * sizeof(double));
 
     // prepare final res
-    auto *h_E = (double *)malloc(K * K * sizeof(double));
+    auto *h_E = new double[K * K];
     double *d_E;
     cudaMalloc(&d_E, K * K * sizeof(double));
 
@@ -522,6 +524,7 @@ void gpuBoostedComputeFullEta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_
     }
 
     cusolverDnDestroy(solver_handle);
+    cublasDestroy(cublas_handle);
     delete[] h_Z;
     delete[] h_R;
     delete[] h_E;
@@ -529,4 +532,66 @@ void gpuBoostedComputeFullEta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_
     cudaFree(d_R);
     cudaFree(d_zR);
     cudaFree(d_E);
+}
+
+void
+gpuBoostedEtaUpdate(int N, int K, const double *znkZ, const double *Zkzn, const double *znkzn,
+                    const gsl_matrix *rho_col, const gsl_matrix *rho_row,
+                    double rho_nn, const gsl_matrix *fullEta, gsl_matrix *etanon) {
+    double *d_znkZ;
+    cudaMalloc(&d_znkZ, K * K * N * sizeof(double));
+    cudaMemcpy(d_znkZ, znkZ, K * K * N * sizeof(double), cudaMemcpyHostToDevice);
+
+    double *d_Zkzn;
+    cudaMalloc(&d_Zkzn, K * K * N * sizeof(double));
+    cudaMemcpy(d_Zkzn, Zkzn, K * K * N * sizeof(double), cudaMemcpyHostToDevice);
+
+    double *d_znkzn;
+    cudaMalloc(&d_znkzn, K * K * sizeof(double));
+    cudaMemcpy(d_znkzn, znkzn, K * K * sizeof(double), cudaMemcpyHostToDevice);
+
+    auto *h_rho_col = new double[N];
+    parseGslMatrix(h_rho_col, rho_col, CblasNoTrans);
+    double *d_rho_col;
+    cudaMalloc(&d_rho_col, N * sizeof(double));
+    cudaMemcpy(d_rho_col, h_rho_col, N * sizeof(double), cudaMemcpyHostToDevice);
+
+    auto *h_rho_row = new double[N];
+    parseGslMatrix(h_rho_row, rho_row, CblasNoTrans);
+    double *d_rho_row;
+    cudaMalloc(&d_rho_row, N * sizeof(double));
+    cudaMemcpy(d_rho_row, h_rho_row, N * sizeof(double), cudaMemcpyHostToDevice);
+
+    double *d_rho_nn;
+    cudaMalloc(&d_rho_nn, 1 * sizeof(double));
+    cudaMemcpy(d_rho_nn, &rho_nn, 1 * sizeof(double), cudaMemcpyHostToDevice);
+
+    auto *h_full_eta = new double[K * K];
+    parseGslMatrix(h_full_eta, fullEta, CblasNoTrans);
+    double *d_full_eta;
+    cudaMalloc(&d_full_eta, K * K * sizeof(double));
+    cudaMemcpy(d_full_eta, h_full_eta, K * K * sizeof(double), cudaMemcpyHostToDevice);
+
+
+    multiplyAndPlus(K * K, N, 1, -1, 1, d_znkZ, d_rho_row, d_full_eta);
+    multiplyAndPlus(K * K, N, 1, -1, 1, d_Zkzn, d_rho_col, d_full_eta);
+    multiplyAndPlus(K * K, 1, 1, 1, 1, d_znkzn, d_rho_nn, d_full_eta);
+
+    cudaMemcpy(h_full_eta, d_full_eta, K * K * sizeof(double), cudaMemcpyDeviceToHost);
+    for(int i = 0; i < etanon->size1; i++){
+        for(int j = 0; j < etanon->size2; j++){
+            gsl_matrix_set(etanon, i, j, h_full_eta[i * etanon->size2 + j]);
+        }
+    }
+
+    delete[] h_rho_col;
+    delete[] h_rho_row;
+    delete[] h_full_eta;
+    cudaFree(d_Zkzn);
+    cudaFree(d_znkZ);
+    cudaFree(d_znkzn);
+    cudaFree(d_rho_col);
+    cudaFree(d_rho_row);
+    cudaFree(d_rho_nn);
+    cudaFree(d_full_eta);
 }

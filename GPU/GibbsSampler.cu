@@ -362,15 +362,15 @@ double init_likelihood_given_znk(int D,
  *              the given number
  */
 void log_likelihood_Rho(int N,
-                       int K,
-                       int r,
-                       const gsl_matrix *Znon, // read only
-                       const gsl_matrix *zn,   // read only
-                       const gsl_matrix *Rho,  // read only
-                       gsl_matrix *Qnon,       // read only
-                       const gsl_matrix *Enon,  // read only
-                       double s2Rho,
-                       double &lik) {
+                        int K,
+                        int r,
+                        const gsl_matrix *Znon, // read only
+                        const gsl_matrix *zn,   // read only
+                        const gsl_matrix *Rho,  // read only
+                        gsl_matrix *Qnon,       // read only
+                        const gsl_matrix *Enon,  // read only
+                        double s2Rho,
+                        double &lik) {
     gsl_matrix *mu = gsl_matrix_calloc(N - 1, 1);// (Z_{-n} Kronecker_Product Zn ) Qnon . Snon. vec(Rho_n)
     const gsl_matrix_view Q_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
     gsl_matrix *SQnon = gsl_matrix_calloc(N - 1, K * K);//(Znon Kron Zn)(Snon^T Snon+beta I)^{-1}
@@ -461,7 +461,6 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
                      double s2Rho,          //  noise variance of the pseudo-observation of the adjacency matrix
                      gsl_matrix **Y,        //  the pseudo-observation matrix of the affinity matrix (the auxiliary Gaussian variable)
                      gsl_matrix *Rho,       //  the pseudo-observation matrix of the adjacency matrix,
-                     gsl_matrix *vecRho,    //  same as Rho, but in vector form
                      gsl_matrix *Z,         //  the IBP latent feature matrix
                      int *nest,             //  nest[i] defines number of 1s at ith feature of Z matrix
                      gsl_matrix *P,         //  P = Z^T Z + 1./s2B
@@ -471,9 +470,8 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
                      gsl_matrix *Q,         //  Q {K^2xK^2}=[(S^T S) + s2Rho/s2H]^{-1}]
                      gsl_matrix *Qnon,      //  Q_{-n} = [Q^{-1} - (S_{n}^T S_{n})]^{-1}
                      gsl_matrix *eta,       //  eta {K^2x1}=(Z kron Z)^T vec(Rho)
-                     gsl_matrix *etanon,    //  eta_{-n}=(Znon kron Znon) vec(Rhonon)
-                     double *ldet_Q,
-                     double *ldet_Q_n) {
+                     gsl_matrix *etanon     //  eta_{-n}=(Znon kron Znon) vec(Rhonon)
+) {
     int TK = 2;
     gsl_matrix_view Zn;
     gsl_matrix_view Pnon_view;
@@ -486,14 +484,13 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
     gsl_matrix *Snon;//Snon= P^{-1}
     double beta = s2Rho / s2H;
 
-    gsl_matrix *ZoZ;
     gsl_matrix *Iden;//Identity matrix
     gsl_matrix *Qexp;
     gsl_matrix *Qmatrix;
     gsl_matrix_view Qmatrix_view;
     gsl_matrix_view Qexp_view;
     gsl_matrix_view Q_view;
-
+    gsl_matrix_view Eta_view;
     gsl_matrix *Znon;
     gsl_matrix_memcpy(Pnon, P);
 
@@ -501,9 +498,9 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
         gsl_matrix_memcpy(lambdanon[d], lambda[d]);
     }
 
-    gsl_matrix_memcpy(Qnon, Q);
-    gsl_matrix_memcpy(etanon, eta);
-    memcpy(ldet_Q_n, ldet_Q, sizeof(double));
+    Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
+    Eta_view = gsl_matrix_submatrix(eta, 0, 0, K * K, 1);
+    compute_full_eta(&Z_view.matrix, Rho, &Eta_view.matrix);
 
     //sample every user
     for (int n = 0; n < N; n++) {
@@ -544,7 +541,7 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
         remove_col(K, N, n, Znon, &Z_view.matrix);
 
         // compute Qnon inverse
-        compute_inverse_Q_directly(N - 1, K, Znon, beta, &Qnon_view.matrix); // original
+        compute_inverse_Q_directly(N - 1, K, Znon, beta, &Qnon_view.matrix);
 
 
         end = chrono::steady_clock::now();
@@ -555,23 +552,8 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
 
         // by this point etanon is full eta
         Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
-
-        // compute etanon
-        normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
-
-
-
-//        end = chrono::steady_clock::now();
-//        LOG(OUTPUT_DEBUG, "Prepare Enon and rho cost =  %lld [ms]",
-//            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
-//        middle = end;
-//
-//
-//
-//        // todo check correctness
-//        gsl_matrix * Ecopy = gsl_matrix_calloc(Enon_view.matrix.size1, Enon_view.matrix.size2);
-//        quick_update_eta(&Z_view.matrix, Rho, n, Ecopy);
-
+        Eta_view = gsl_matrix_submatrix(eta, 0, 0, K * K, 1);
+        rank_one_update_eta(K, N, n, &Z_view.matrix, &Zn.matrix, Rho, &Eta_view.matrix, &Enon_view.matrix);
 
 
         end = chrono::steady_clock::now();
@@ -644,11 +626,13 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
 
 
         if (flagDel) {
-            LOG(OUTPUT_INFO, "Update P and Q after removing a zero feature column ......");
+            LOG(OUTPUT_INFO, "Update parameters due to remove feature");
+            Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
 
             // compute new full P
+            gsl_matrix_view P_view = gsl_matrix_submatrix(P, 0, 0, K, K);
             gsl_matrix_set_identity(P);
-            matrix_multiply(Z, Z, P, 1, 1 / s2B, CblasNoTrans, CblasTrans);
+            matrix_multiply(&Z_view.matrix, &Z_view.matrix, &P_view.matrix, 1, 1 / s2B, CblasNoTrans, CblasTrans);
 
             // compute new Pnon
             gsl_matrix_memcpy(Pnon, P);
@@ -664,43 +648,26 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
                 matrix_multiply(&Zn.matrix, &Ydn.matrix, &Lnon_view.matrix, -1, 1, CblasNoTrans, CblasTrans);
             }
 
-            Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
-
             // compute new full Q
-            gsl_matrix_set_identity(Q);
             Q_view = gsl_matrix_submatrix(Q, 0, 0, K * K, K * K);
-
-            ZoZ = gsl_matrix_calloc(K * K, N * N);
-            gsl_Kronecker_product(ZoZ, &Z_view.matrix, &Z_view.matrix);
-            matrix_multiply(ZoZ, ZoZ, &Q_view.matrix, 1, beta, CblasNoTrans, CblasTrans);
-
-            inverse(&Q_view.matrix);
-
-            ldet_Q[0] = lndet_get(&Q_view.matrix, K * K, K * K);
-
-            gsl_matrix_memcpy(Qnon, Q);
-            memcpy(ldet_Q_n, ldet_Q, sizeof(double));
-            //Update both Qnon, log(det(Qnon)) and etanon
-            Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
+            compute_inverse_Q_directly(N, K, &Z_view.matrix, beta, &Q_view.matrix);
 
             // compute new Qnon
+            Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
             Znon = gsl_matrix_calloc(K, N - 1);
             remove_col(K, N, n, Znon, &Z_view.matrix);
             compute_inverse_Q_directly(N - 1, K, Znon, beta, &Qnon_view.matrix);
-            LOG(OUTPUT_DEBUG, "Removing a feature column ldet_Q=%f, ldet_Qnon = %f", ldet_Q[0],
-                lndet_get(&Qnon_view.matrix, K * K, K * K));
 
             // compute new full eta
-            gsl_matrix_view Eta_view = gsl_matrix_submatrix(eta, 0, 0, K * K, 1);
-            matrix_multiply(ZoZ, vecRho, &Eta_view.matrix, 1, 0, CblasNoTrans, CblasNoTrans);
-            gsl_matrix_free(ZoZ);
+            Eta_view = gsl_matrix_submatrix(eta, 0, 0, K * K, 1);
+            compute_full_eta(&Z_view.matrix, Rho, &Eta_view.matrix);
 
             // compute new Etanon
             Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
-            normal_update_eta(Znon, Rho, n, &Enon_view.matrix);
+            rank_one_update_eta(K, N, n, &Z_view.matrix, &Zn.matrix, Rho, &Eta_view.matrix ,&Enon_view.matrix);
 
             gsl_matrix_free(Znon);
-            LOG(OUTPUT_DEBUG, "End of updating Eta after removing a feature column.......");
+            LOG(OUTPUT_DEBUG, "End of updating parameters");
         }
 
 
@@ -835,30 +802,21 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
         middle = end;
 
 
-        //update Qnon by adding Zn
+        // compute full Q with new Z
         Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
         Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
-        // compute full Q with new Z
         compute_inverse_Q_directly(N, K, &Z_view.matrix, beta, &Qnon_view.matrix);
         gsl_matrix_memcpy(Q, Qnon);
-
-        Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
-
-
 
         end = chrono::steady_clock::now();
         LOG(OUTPUT_DEBUG, "Update full Q cost = %lld [ms]",
             chrono::duration_cast<chrono::milliseconds>(end - middle).count());
         middle = end;
 
-
-
         // compute full eta
-        ZoZ = gsl_matrix_calloc(K * K, N * N);
-        gsl_Kronecker_product(ZoZ, &Z_view.matrix, &Z_view.matrix);
-        matrix_multiply(ZoZ, vecRho, &Enon_view.matrix, 1, 0, CblasNoTrans, CblasNoTrans);
+        Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
+        compute_full_eta(&Z_view.matrix, Rho, &Enon_view.matrix);
         gsl_matrix_memcpy(eta, etanon);
-
 
         end = chrono::steady_clock::now();
         LOG(OUTPUT_DEBUG, "Update full Eta cost = %lld [ms]",
@@ -866,27 +824,7 @@ int AcceleratedGibbs(int maxK,              //  max number of latent features
         middle = end;
 
 
-        // todo test new eta computation method
-        gsl_matrix * eta_new_method = gsl_matrix_calloc(eta->size1, eta->size2);
-        compute_full_eta(&Z_view.matrix, Rho, eta_new_method);
-        gsl_matrix_free(eta_new_method);
-
-
-        end = chrono::steady_clock::now();
-        LOG(OUTPUT_DEBUG, "Update full Eta new method cost = %lld [ms]",
-            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
-        middle = end;
-
-
-
-        gsl_matrix_free(ZoZ);
         delete[] p;
-
-
-        end = chrono::steady_clock::now();
-        LOG(OUTPUT_DEBUG, "Update Z cost = %lld [ms]",
-            chrono::duration_cast<chrono::milliseconds>(end - middle).count());
-        middle = end;
 
         if ((n + 1) % 50 == 0) {
             LOG(OUTPUT_INFO, "[%d / %d] Total cost = %lld [ms]", n + 1, N,
