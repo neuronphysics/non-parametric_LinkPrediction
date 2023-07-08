@@ -2,7 +2,6 @@
 // Created by su999 on 2023/4/10.
 //
 
-#include <thread>
 #include "GibbsSampler.cuh"
 
 using namespace std;
@@ -447,7 +446,7 @@ void log_likelihood_Rho(int N,
 }
 
 // Functions section 3.1
-int AcceleratedGibbs(int maxK,              //  max number of latent features
+int accelerated_gibbs(int maxK,              //  max number of latent features
                      int bias,              //  the index of actual feature, also you can treat it as the number of random feature
                      int N,                 //  number of users
                      int D,                 //  number of attributes

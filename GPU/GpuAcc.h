@@ -25,7 +25,7 @@ gpuMatrixMultiply(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *C, doubl
 void
 gpuKron(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *Res);
 
-void symmetricAndPDMatrixInverse(gsl_matrix * matrix);
+//void symmetricAndPDMatrixInverse(gsl_matrix * matrix);
 
 void gpuBoostedComputeFullEta(const gsl_matrix * Z, const gsl_matrix * Rho, gsl_matrix * etaKK);
 

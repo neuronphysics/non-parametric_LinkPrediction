@@ -25,33 +25,6 @@ int getArraySize(const string &s, const int s_length) {
     return counter;
 }
 
-void test() {
-    int N = 3;
-    int K = 2;
-    int n = 0;
-
-    gsl_matrix *Z = gsl_matrix_calloc(K, N);
-    gsl_matrix_set(Z, 0, 0, 0);
-    gsl_matrix_set(Z, 0, 1, 1);
-    gsl_matrix_set(Z, 0, 2, 1);
-    gsl_matrix_set(Z, 1, 0, 1);
-    gsl_matrix_set(Z, 1, 1, 0);
-    gsl_matrix_set(Z, 1, 2, 1);
-
-    gsl_matrix_view zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
-
-    gsl_matrix *Rho = gsl_matrix_calloc(N, N);
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            gsl_matrix_set(Rho, i, j, i * N + j + 1);
-        }
-    }
-
-    gsl_matrix * Eta = gsl_matrix_calloc(K * K, 1);
-    gsl_matrix * Etanon = gsl_matrix_calloc(K * K, 1);
-    rank_one_update_eta(K, N, n, Z, &zn.matrix, Rho, Eta, Etanon);
-}
-
 
 int main() {
     LOG(OUTPUT_NORMAL, "Version description:")
@@ -75,7 +48,7 @@ int main() {
     // ---------------------------------- Load data from txt file -------------------------------------
     string dataSetName = DATASET_NAME;
     init_util_functions(dataSetName);
-    string filePath = R"(E:\clion projects\glfm_cuda_acc\dataSet\)";
+    string filePath = R"(E:\clion projects\non-parametric_LinkPrediction\GPU\dataSet\)";
     string adjFileName = "Adjacency_matrix";
     string attrFileName = "Attribute_matrix";
 
@@ -84,11 +57,18 @@ int main() {
     string line;
     const char *delim = "\t";
 
+    adjFileName = filePath + adjFileName + dataSetName;
+    attrFileName = filePath + attrFileName + dataSetName;
+    ifstream adjIn(adjFileName);
+    ifstream attributeIn(attrFileName);
 
-    ifstream adjIn(filePath + adjFileName + dataSetName + ".txt");
-    ifstream attributeIn(filePath + attrFileName + dataSetName + ".txt");
+    // check if the file open properly
+    if(!adjIn.is_open() || !attributeIn.is_open()){
+        LOG(OUTPUT_NORMAL, "Open file fail")
+        return 1;
+    }
 
-
+    // read adj file line by line
     while (getline(adjIn, line)) {
         lines.emplace_back(line);
     }

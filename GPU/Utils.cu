@@ -428,8 +428,8 @@ void compute_inverse_Q_directly(int N, int K, const gsl_matrix *Z, double beta, 
     gsl_matrix_free(identity);
     gsl_matrix_free(zzT);
 
-
-    symmetricAndPDMatrixInverse(Q);
+    inverse(Q);
+//    symmetricAndPDMatrixInverse(Q);
 }
 
 /**

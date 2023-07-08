@@ -29,6 +29,7 @@
 #include "string"
 #include "ostream"
 #include "fstream"
+#include <thread>
 
 extern std::ofstream matrixOut;
 extern uint64_t timeSeed;

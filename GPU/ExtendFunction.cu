@@ -108,7 +108,7 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
 
     LOG(OUTPUT_DEBUG, "Initialize done, maxR = %d", maxR);
 
-    int Kest = IBPsampler_func(missing, X, C, Net, Z, B, theta,
+    int Kest = IBP_sampler_func(missing, X, C, Net, Z, B, theta,
                                H, A, R, &Fin[0], F, &mu[0], &w[0],
                                maxR, bias, N, D, K, alpha, s2B, &s2Y[0], s2Rho, s2H, s2u, maxK, Nsim);
     LOG(OUTPUT_DEBUG, "\nExit IBP sampler\n");

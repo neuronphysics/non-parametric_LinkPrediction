@@ -5,6 +5,7 @@ using namespace std;
 
 #define blocksize 8
 #define TILE_DIM 16
+#define BLOCK_DIM 16
 
 __global__ void nodiag_normalize(double *A, double *I, int n, int i) {
     int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -367,7 +368,8 @@ gpuKron(const gsl_matrix *A, const gsl_matrix *B, gsl_matrix *Res) {
     delete[] output;
 }
 
-
+// wait until cusolver could be used
+/**
 void symmetricAndPDMatrixInverse(gsl_matrix *matrix) {
     int N = matrix->size1;
 
@@ -469,20 +471,40 @@ void symmetricAndPDMatrixInverse(gsl_matrix *matrix) {
     cudaFree(work);
     cudaFree(devInfo);
 }
+ */
+
+__global__ void transpose(double *dest, double *source, int width, int height)
+{
+    __shared__ double block[BLOCK_DIM][BLOCK_DIM+1];
+
+    // read the matrix tile into shared memory
+    // load one element per thread from device memory (idata) and store it
+    // in transposed order in block[][]
+    unsigned int xIndex = blockIdx.x * BLOCK_DIM + threadIdx.x;
+    unsigned int yIndex = blockIdx.y * BLOCK_DIM + threadIdx.y;
+    if((xIndex < width) && (yIndex < height))
+    {
+        unsigned int index_in = yIndex * width + xIndex;
+        block[threadIdx.y][threadIdx.x] = source[index_in];
+    }
+
+    // synchronise to ensure all writes to block[][] have completed
+    __syncthreads();
+
+    // write the transposed matrix tile to global memory (odata) in linear order
+    xIndex = blockIdx.y * BLOCK_DIM + threadIdx.x;
+    yIndex = blockIdx.x * BLOCK_DIM + threadIdx.y;
+    if((xIndex < height) && (yIndex < width))
+    {
+        unsigned int index_out = yIndex * height + xIndex;
+        dest[index_out] = block[threadIdx.x][threadIdx.y];
+    }
+}
 
 
 void gpuBoostedComputeFullEta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_matrix *etaKK) {
     int K = Z->size1;
     int N = Z->size2;
-
-    // --- CUDA solver initialization
-    cusolverDnHandle_t solver_handle;
-    cusolverDnCreate(&solver_handle);
-
-    // --- CUBLAS initialization
-    cublasHandle_t cublas_handle;
-    cublasCreate(&cublas_handle);
-
 
     // prepare Z
     auto *h_Z = new double[K * N];
@@ -490,6 +512,14 @@ void gpuBoostedComputeFullEta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_ma
     double *d_Z;
     cudaMalloc(&d_Z, K * N * sizeof(double));
     cudaMemcpy(d_Z, h_Z, K * N * sizeof(double), cudaMemcpyHostToDevice);
+
+    // prepare ZT
+    double *d_ZT;
+    cudaMalloc(&d_ZT, K * N * sizeof(double));
+    dim3 grid((N + BLOCK_DIM - 1) / BLOCK_DIM, (K + BLOCK_DIM - 1) / BLOCK_DIM, 1);
+    dim3 threads(BLOCK_DIM, BLOCK_DIM, 1);
+    transpose<<< grid, threads >>>(d_ZT, d_Z, N, K);
+
 
     // prepare Rho
     auto *h_R = new double[N * N];
@@ -507,15 +537,12 @@ void gpuBoostedComputeFullEta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_ma
     double *d_E;
     cudaMalloc(&d_E, K * K * sizeof(double));
 
-    double alpha = 1.0;
-    double beta = 0;
-
 
     multiplyAndPlus(K, N, N, 1, 0, d_Z, d_R, d_zR);
-    cublasDgemm(cublas_handle, CUBLAS_OP_T, CUBLAS_OP_N, K, K, N, &alpha, d_zR, N, d_Z, N, &beta, d_E, K);
-
+    multiplyAndPlus(K, N, K, 1, 0, d_zR, d_ZT, d_E);
 
     cudaMemcpy(h_E, d_E, K * K * sizeof(double), cudaMemcpyDeviceToHost);
+
 
     for (int i = 0; i < K; i++) {
         for (int j = 0; j < K; j++) {
@@ -523,8 +550,6 @@ void gpuBoostedComputeFullEta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_ma
         }
     }
 
-    cusolverDnDestroy(solver_handle);
-    cublasDestroy(cublas_handle);
     delete[] h_Z;
     delete[] h_R;
     delete[] h_E;
@@ -532,6 +557,7 @@ void gpuBoostedComputeFullEta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_ma
     cudaFree(d_R);
     cudaFree(d_zR);
     cudaFree(d_E);
+    cudaFree(d_ZT);
 }
 
 void
@@ -578,8 +604,8 @@ gpuBoostedEtaUpdate(int N, int K, const double *znkZ, const double *Zkzn, const 
     multiplyAndPlus(K * K, 1, 1, 1, 1, d_znkzn, d_rho_nn, d_full_eta);
 
     cudaMemcpy(h_full_eta, d_full_eta, K * K * sizeof(double), cudaMemcpyDeviceToHost);
-    for(int i = 0; i < etanon->size1; i++){
-        for(int j = 0; j < etanon->size2; j++){
+    for (int i = 0; i < etanon->size1; i++) {
+        for (int j = 0; j < etanon->size2; j++) {
             gsl_matrix_set(etanon, i, j, h_full_eta[i * etanon->size2 + j]);
         }
     }

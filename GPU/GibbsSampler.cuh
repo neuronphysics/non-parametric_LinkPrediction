@@ -72,7 +72,7 @@ void log_likelihood_Rho(int N,
                        double s2Rho,
                        double &lik);
 
-int AcceleratedGibbs(int maxK,          //Maximum number of latent features
+int accelerated_gibbs(int maxK,          //Maximum number of latent features
                      int bias,          //An extra latent feature
                      int N,             //Number of objects
                      int D,             //Number of attributes

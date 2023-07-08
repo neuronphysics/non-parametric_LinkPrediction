@@ -4,7 +4,7 @@ using namespace std;
 
 
 void
-SampleY(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2Y, double s2u,
+sample_Y(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2Y, double s2u,
         double s2theta, gsl_matrix *X, gsl_matrix *Z, gsl_matrix *Yd, gsl_matrix *Bd, gsl_vector *thetad,
         const gsl_rng *seed) {
     double sYd = sqrt(s2Y);
@@ -183,8 +183,47 @@ SampleY(double missing, int N, int d, int K, char Cd, int Rd, double fd, double 
     }
 }
 
+void parallel_sample_binary_rho(int N, int K, int start, int end, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *Rho,
+                             gsl_matrix *vecH, const gsl_rng *seed,
+                             double sRho, double missing) {
+    gsl_matrix *ZmT = gsl_matrix_calloc(1, K);
+    gsl_matrix *ZnT = gsl_matrix_calloc(1, K);
+    gsl_matrix *aux = gsl_matrix_calloc(1, K * K);
+    gsl_matrix *mu_rho = gsl_matrix_calloc(1, 1);
+    for (int row = start; row < end; row++) {
+        gsl_matrix_view Zm = gsl_matrix_submatrix(Z, 0, row, K, 1);
+        for (int col = row; col < N; col++) {
+            gsl_matrix_view Zn = gsl_matrix_submatrix(Z, 0, col, K, 1);
+            gsl_matrix_transpose_memcpy(ZnT, &Zn.matrix);
+            gsl_matrix_transpose_memcpy(ZmT, &Zm.matrix);
+            gsl_Kronecker_product(aux, ZnT, ZmT);
+            matrix_multiply(aux, vecH, mu_rho, 1, 0, CblasNoTrans, CblasNoTrans);
+
+            int a_nm = (int) gsl_matrix_get(A, row, col);
+            if (gsl_isnan(a_nm || a_nm == missing)) {
+                gsl_matrix_set(Rho, row, col, gsl_matrix_get(mu_rho, 0, 0) + gsl_ran_gaussian(seed, sRho));
+            } else if (a_nm == 0) {
+
+                gsl_matrix_set(Rho, row, col,
+                               truncnormrnd(gsl_matrix_get(mu_rho, 0, 0), sRho, GSL_NEGINF, 0, seed));
+            } else if (a_nm == 1) {
+
+                gsl_matrix_set(Rho, row, col,
+                               truncnormrnd(gsl_matrix_get(mu_rho, 0, 0), sRho, 0, GSL_POSINF, seed));
+            }
+            gsl_matrix_set(Rho, col, row, gsl_matrix_get(Rho, row, col));
+
+        }
+    }
+    gsl_matrix_free(mu_rho);
+    gsl_matrix_free(aux);
+    gsl_matrix_free(ZmT);
+    gsl_matrix_free(ZnT);
+}
+
+
 // Sample Rho : pseudo-observation of the adjacency matrix
-void SampleRho(double missing,
+void sample_rho(double missing,
                int N,
                int K,
                char Ca,
@@ -197,34 +236,34 @@ void SampleRho(double missing,
                gsl_matrix *H,
                const gsl_rng *seed) {
     double sRho = sqrt(s2Rho);
-    gsl_matrix_view Zview = gsl_matrix_submatrix(Z, 0, 0, K, N);
+    gsl_matrix_view Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
     gsl_matrix_view H_view = gsl_matrix_submatrix(H, 0, 0, K, K);
     gsl_matrix *vecH = gsl_matrix_calloc(K * K, 1);
     gsl_matrix2vector(vecH, &H_view.matrix);
-    gsl_matrix *mu_rho;
-    gsl_matrix *aux = gsl_matrix_calloc(1, K * K);
-    gsl_matrix *ZmT = gsl_matrix_calloc(1, K);
-    gsl_matrix *ZnT = gsl_matrix_calloc(1, K);
-    gsl_matrix_view Zn;
-    gsl_matrix_view Zm;
-    int a_nm;
+
+
     // Sample pseudo adjacency matrix
     if (Ca == 'w') {
+        gsl_matrix *mu_rho = gsl_matrix_calloc(1, 1);
+        gsl_matrix *aux = gsl_matrix_calloc(1, K * K);
+        gsl_matrix *ZmT = gsl_matrix_calloc(1, K);
+        gsl_matrix *ZnT = gsl_matrix_calloc(1, K);
+        gsl_matrix_view Zn;
+        gsl_matrix_view Zm;
+        int a_nm;
         double mud;
         double wd;
-        //https://gist.github.com/microo8/4065693
         gsl_vector_view An_view;
 
         for (int m = 0; m < N; m++) {
-            Zm = gsl_matrix_submatrix(Z, 0, m, K, 1);
+            Zm = gsl_matrix_submatrix(&Z_view.matrix, 0, m, K, 1);
             An_view = gsl_matrix_row(A, m);
             mud = compute_vector_mean(N, missing, &An_view.vector);
             wd = 1. / sqrt(compute_vector_var(N, missing, &An_view.vector));
             gsl_matrix_transpose_memcpy(ZmT, &Zm.matrix);
             for (int n = 0; n < m; n++) {//try to keep Rho matrix symmetric
-                mu_rho = gsl_matrix_calloc(1, 1);
                 a_nm = gsl_matrix_get(A, m, n);
-                Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
+                Zn = gsl_matrix_submatrix(&Z_view.matrix, 0, n, K, 1);
                 gsl_matrix_transpose_memcpy(ZnT, &Zn.matrix);
                 gsl_matrix_transpose_memcpy(ZmT, &Zm.matrix);
                 //gsl_Kronecker_product(aux, &z_n_column.matrix, &z_m_column.matrix);//???
@@ -242,58 +281,32 @@ void SampleRho(double missing,
 
             }
         }
-
+        gsl_matrix_free(ZmT);
+        gsl_matrix_free(ZnT);
+        gsl_matrix_free(aux);
+        gsl_matrix_free(mu_rho);
     } else if (Ca == 'b') {
-        // binary values
-        for (int m = 0; m < N; m++) {
-            Zm = gsl_matrix_submatrix(Z, 0, m, K, 1);
-            for (int n = 0; n < m; n++) {
-                mu_rho = gsl_matrix_calloc(1, 1);
-                Zn = gsl_matrix_submatrix(Z, 0, n, K, 1);
-                gsl_matrix_transpose_memcpy(ZnT, &Zn.matrix);
-                gsl_matrix_transpose_memcpy(ZmT, &Zm.matrix);
-                gsl_Kronecker_product(aux, ZnT, ZmT);
-                matrix_multiply(aux, vecH, mu_rho, 1, 0, CblasNoTrans, CblasNoTrans);
+        vector<thread*> threads;
+        int start = 0;
+        int range = 30;
+        while(start < N){
+            int end = min(start + range, N);
+            auto * t = new thread(parallel_sample_binary_rho, N, K, start, end, A, &Z_view.matrix, Rho, vecH, seed, sRho, missing);
+            threads.emplace_back(t);
+            start = end;
+            range++;
+        }
 
-                a_nm = (int) gsl_matrix_get(A, m, n);
-                if (gsl_isnan(a_nm || a_nm == missing)) {
-                    gsl_matrix_set(Rho, m, n, gsl_matrix_get(mu_rho, 0, 0) + gsl_ran_gaussian(seed, sRho));
-                } else if (a_nm == 0) {
-
-                    gsl_matrix_set(Rho, m, n,
-                                   truncnormrnd(gsl_matrix_get(mu_rho, 0, 0), sRho, GSL_NEGINF, 0, seed));
-                } else if (a_nm == 1) {
-
-                    gsl_matrix_set(Rho, m, n,
-                                   truncnormrnd(gsl_matrix_get(mu_rho, 0, 0), sRho, 0, GSL_POSINF, seed));
-                }
-                gsl_matrix_set(Rho, n, m, gsl_matrix_get(Rho, m, n));
-
-                //print the problematic part of the code
-                if (isinf(gsl_matrix_get(Rho, m, n))) {
-                    LOG(OUTPUT_DEBUG, "mu: %3.2f\n", gsl_matrix_get(mu_rho, 0, 0));
-                    LOG(OUTPUT_DEBUG, "\n vec(H):\n");
-                    for (int row = 0; row < K * K; ++row)
-                        LOG(OUTPUT_DEBUG, "%6.5f\t", gsl_matrix_get(vecH, row, 0));
-                    LOG(OUTPUT_DEBUG, "\n Z x Z:\n");
-                    for (int col = 0; col < K * K; ++col)
-                        LOG(OUTPUT_DEBUG, "%6.5f\t", gsl_matrix_get(aux, 0, col));
-                    LOG(OUTPUT_DEBUG, "\n---\n---\n");
-                    LOG(OUTPUT_DEBUG, "m:%d , n:%d , A_{mn}: %.2f, A_{mn}: %d, Rho: %.3f\n", m, n,
-                        gsl_matrix_get(A, m, n), a_nm,
-                        gsl_matrix_get(Rho, m, n));
-                }
-            }
+        for(auto t : threads){
+            t->join();
+            delete t;
         }
     }
-    gsl_matrix_free(ZmT);
-    gsl_matrix_free(ZnT);
     gsl_matrix_free(vecH);
-    gsl_matrix_free(aux);
-    gsl_matrix_free(mu_rho);
+
 }
 
-double SampleAlpha(int Kplus, int N, const gsl_rng *seed) {
+double sample_alpha(int Kplus, int N, const gsl_rng *seed) {
     double Harmonic_N = 0.;
     double i = 1.;
     while (i < N + 1) {
@@ -307,7 +320,7 @@ double SampleAlpha(int Kplus, int N, const gsl_rng *seed) {
     return alpha;
 }
 
-double Samples2Y(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2u,
+double sample_s2Y(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2u,
                  double s2theta, gsl_matrix *X, gsl_matrix *Z, gsl_matrix *Yd, gsl_matrix *Bd, gsl_vector *thetad,
                  const gsl_rng *seed) {
     double a = 2;
@@ -339,7 +352,7 @@ double Samples2Y(double missing, int N, int d, int K, char Cd, int Rd, double fd
 
 // sample noise variance of the pseudo-observation of the adjacency matrix
 double
-Samples2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl_matrix *vecH, const gsl_rng *seed) {
+sample_s2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl_matrix *vecH, const gsl_rng *seed) {
     double a = 1;
     double b = 1;
 
@@ -355,12 +368,7 @@ Samples2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl_
     gsl_matrix_sub(aux, vecRho);
     matrix_multiply(aux, aux, D, 1, 0, CblasTrans, CblasNoTrans);
 
-    for (int n = 0; n < N * N; n++) {
-        if (isinf(gsl_matrix_get(vecRho, n, 0))) {
-            LOG(OUTPUT_DEBUG, "%d , %.3f \n", n, gsl_matrix_get(vecRho, n, 0));
-        }
-    }
-    LOG(OUTPUT_DEBUG, "sample s2rho: %.4f", gsl_matrix_get(D, 0, 0));
+
     double precision = gsl_ran_gamma(seed, a + N * N / 2., 1 / (b + gsl_matrix_get(D, 0, 0) / 2.));//???????
     gsl_matrix_free(aux);
     gsl_matrix_free(S);
@@ -369,20 +377,19 @@ Samples2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl_
 }
 
 
-double Samples2H(int K, gsl_matrix *vecH, const gsl_rng *seed) {
+double sample_s2H(int K, gsl_matrix *vecH, const gsl_rng *seed) {
     double a = 2;
     double b = 1;
     gsl_matrix *var = gsl_matrix_calloc(1, 1);
 
     matrix_multiply(vecH, vecH, var, 1, 0, CblasTrans, CblasNoTrans);
-    LOG(OUTPUT_DEBUG, "sample s2H: %.4f", gsl_matrix_get(var, 0, 0));
     double precision = gsl_ran_gamma(seed, a + K * K / 2., b / (1 + b * gsl_matrix_get(var, 0, 0) / 2));
     gsl_matrix_free(var);
     return 1. / precision;
 }
 
 
-int IBPsampler_func(double missing,     // how the missing data is defined
+int IBP_sampler_func(double missing,     // how the missing data is defined
                     gsl_matrix *X,      // user-attribute matrix, real observation of the users
                     char *C,            // define the data type of each attribute
                     char *Net,          // the type of network
@@ -632,7 +639,7 @@ int IBPsampler_func(double missing,     // how the missing data is defined
     // main loop
     for (int it = 0; it < Nsim; it++) {
         print_iteration_num(it);
-        int Kaux = AcceleratedGibbs(maxK, bias, N, D, Kest, C, R, alpha, s2B, s2Y, s2H, s2Rho, Y, Rho, Z, nest,
+        int Kaux = accelerated_gibbs(maxK, bias, N, D, Kest, C, R, alpha, s2B, s2Y, s2H, s2Rho, Y, Rho, Z, nest,
                                     P, Pnon, lambda, lambdanon, Q, Qnon, Eta, Etanon);
 
         LOG(OUTPUT_NORMAL, "new K = %d", Kaux);
@@ -669,10 +676,10 @@ int IBPsampler_func(double missing,     // how the missing data is defined
             }
 
             //Sample Y
-            SampleY(missing, N, d, Kest, C[d], R[d], f[d], mu[d], w[d], s2Y[d], s2u, s2theta, X, Z, Y[d], B[d],
+            sample_Y(missing, N, d, Kest, C[d], R[d], f[d], mu[d], w[d], s2Y[d], s2u, s2theta, X, Z, Y[d], B[d],
                     theta[d], seed);
             if (C[d] != 'c' && C[d] != 'o') {
-                double aux = Samples2Y(missing, N, d, Kest, C[d], R[d], f[d], mu[d], w[d], s2u, s2theta, X, Z, Y[d],
+                double aux = sample_s2Y(missing, N, d, Kest, C[d], R[d], f[d], mu[d], w[d], s2u, s2theta, X, Z, Y[d],
                                        B[d], theta[d], seed);
                 if (aux != 0 && !isinf(aux) && !isnan(aux)) {
                     s2Y[d] = aux;
@@ -727,18 +734,18 @@ int IBPsampler_func(double missing,     // how the missing data is defined
         print_matrix((const gsl_matrix **) B, "B matrix", D, Kest);
 
 
-        // sampleRho
-        SampleRho(missing, N, Kest, Net[0], fa, s2Rho, s2u, A, Z, Rho, &H_view.matrix, seed);
+        // sample_rho
+        sample_rho(missing, N, Kest, Net[0], fa, s2Rho, s2u, A, Z, Rho, &H_view.matrix, seed);
 
         // sample the variance of Rho and H
-        gsl_matrix * vecRho = gsl_matrix_calloc(N * N, 1);
+        gsl_matrix *vecRho = gsl_matrix_calloc(N * N, 1);
         gsl_matrix2vector(vecRho, Rho);
-        s2Rho = Samples2Rho(N, Kest, A, Z, vecRho, vecH, seed);
+        s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
         gsl_matrix_free(vecRho);
 
-        s2H = Samples2H(Kest, vecH, seed);
+        s2H = sample_s2H(Kest, vecH, seed);
 
-        alpha = SampleAlpha(Kest, N, seed);
+        alpha = sample_alpha(Kest, N, seed);
 
         LOG(OUTPUT_INFO, "");
         LOG(OUTPUT_INFO, "s2_rho --> %.3f", s2Rho);

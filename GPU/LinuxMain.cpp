@@ -58,9 +58,14 @@ int main() {
     const char *delim = "\t";
 
 
-    ifstream adjIn(filePath + adjFileName + dataSetName + ".txt");
-    ifstream attributeIn(filePath + attrFileName + dataSetName + ".txt");
+    ifstream adjIn(filePath + adjFileName + dataSetName);
+    ifstream attributeIn(filePath + attrFileName + dataSetName);
 
+    // check if the file open properly
+    if(!adjIn.is_open() || !attributeIn.is_open()){
+        LOG(OUTPUT_NORMAL, "Open file fail")
+        return 1;
+    }
 
     while (getline(adjIn, line)) {
         lines.emplace_back(line);
