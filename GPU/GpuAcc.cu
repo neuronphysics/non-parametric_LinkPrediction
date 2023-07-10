@@ -61,8 +61,7 @@ __global__ void set_zero(double *A, double *I, int n, int i) {
 
 
 void setUpCUDA(double *L, double *iL, int matSize) {
-    double *d_A, *d_L, *I, *dI;
-    float time;
+    double *d_A, *I, *dI;
     cudaError_t err;
 
     int ddsize = matSize * matSize * sizeof(double);
