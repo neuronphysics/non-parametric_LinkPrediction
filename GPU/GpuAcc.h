@@ -3,15 +3,9 @@
 
 #include <gsl/gsl_matrix.h>
 #include <iostream>
-#include <gsl/gsl_cblas.h>
 
 #pragma comment(lib, "cuda.lib")
 #pragma comment(lib, "cudart.lib")
-
-
-#include <cusolverDn.h>
-#include <cublas_v2.h>
-#include <cuda_runtime_api.h>
 
 
 

@@ -461,9 +461,9 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         nest[k] = ncount;
     }
 
-    auto **Y = (gsl_matrix **) calloc(D, sizeof(gsl_matrix *));
-    auto **lambda = (gsl_matrix **) calloc(D, sizeof(gsl_matrix *));
-    auto **lambdanon = (gsl_matrix **) calloc(D, sizeof(gsl_matrix *));
+    auto **Y = new gsl_matrix *[D];
+    auto **lambda = new gsl_matrix *[D];
+    auto **lambdanon = new gsl_matrix *[D];
 
     //Initialize Y
     for (int d = 0; d < D; d++) {
@@ -618,7 +618,7 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
                     // use 0 as the mean here because H is currently all 0, thus, mean is 0
                     gsl_matrix_set(Rho, m, n, gsl_ran_gaussian(seed, sqrt(s2Rho)));
                 } else if (a_mn == 0) {
-                    // it just give it a negative number follows normal distribution with mean 0
+                    // it just gives it a negative number follows normal distribution with mean 0
                     gsl_matrix_set(Rho, m, n, truncnormrnd(0, sqrt(s2Rho), GSL_NEGINF, 0, seed));
                 } else if (a_mn == 1) {
                     gsl_matrix_set(Rho, m, n, truncnormrnd(0, sqrt(s2Rho), 0, GSL_POSINF, seed));
@@ -631,7 +631,7 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
     // compute full Eta
     gsl_matrix *Eta = gsl_matrix_calloc(maxK * maxK, 1);
     gsl_matrix *Etanon = gsl_matrix_calloc(maxK * maxK, 1);
-
+    gsl_matrix *vecRho = gsl_matrix_calloc(N * N, 1);
 
     LOG(OUTPUT_DEBUG, "Before IT loop...");
     LOG(OUTPUT_DEBUG, "Nsim = %d", Nsim);
@@ -738,10 +738,8 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         sample_rho(missing, N, Kest, Net[0], fa, s2Rho, s2u, A, Z, Rho, &H_view.matrix, seed);
 
         // sample the variance of Rho and H
-        gsl_matrix *vecRho = gsl_matrix_calloc(N * N, 1);
         gsl_matrix2vector(vecRho, Rho);
         s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
-        gsl_matrix_free(vecRho);
 
         s2H = sample_s2H(Kest, vecH, seed);
 
@@ -766,10 +764,11 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         gsl_matrix_free(lambda[d]);
         gsl_matrix_free(lambdanon[d]);
     }
-    free(lambda);
-    free(lambdanon);
-    free(Y);
+    delete[]lambda;
+    delete[]lambdanon;
+    delete[]Y;
 
+    gsl_matrix_free(vecRho);
     gsl_matrix_free(P);
     gsl_matrix_free(Pnon);
     gsl_matrix_free(Q);

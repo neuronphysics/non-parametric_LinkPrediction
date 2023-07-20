@@ -91,8 +91,6 @@ void init_util_functions(const std::string &exeName);
 
 int factorial(int N);
 
-double log(double x);
-
 double expFun(double x);
 
 double lndet_get(const gsl_matrix *Amat, int Arows, int Acols);

@@ -123,14 +123,6 @@ double compute_vector_min(int N, double missing, const gsl_vector *v) {
     return minX;
 }
 
-/**
- * Compute log(x) base e
- * @param x Input, x needs to be greater than 0
- * @return log(x)
- */
-double log(double x) {
-    return gsl_sf_log(x);
-}
 
 /**
  * Compute Exp(x) base e, with -300 < x < 300
@@ -287,23 +279,23 @@ double truncnormrnd(double mu, double sigma, double xlo, double xhi, const gsl_r
 
     // when (xlo - mu) / sigma greater than 5, the result will be 1, resulting z = inf
     double plo = gsl_cdf_gaussian_P((xlo - mu) / sigma, 1.0);
-    if (plo == 1) {
+    if (plo >= 1) {
         LOG(OUTPUT_NORMAL, "plo too large, mu = %f, sigma = %f", mu, sigma)
         plo = 0.99999;
     }
     double phi = gsl_cdf_gaussian_P((xhi - mu) / sigma, 1.0);
-    if (phi == 0) {
+    if (phi <= 0) {
         LOG(OUTPUT_NORMAL, "phi too small, mu = %f, sigma = %f", mu, sigma)
         phi = 0.00001;
     }
 
     double r = gsl_rng_uniform(rng);
     double res = r * (phi - plo) + plo;
-    if (res == 1) {
+    if (res >= 1) {
         LOG(OUTPUT_NORMAL, "res too large, mu = %f, sigma = %f, r = %f", mu, sigma, r)
         res = 0.99999999;
     }
-    if (res == 0) {
+    if (res <= 0) {
         LOG(OUTPUT_NORMAL, "res too small, mu = %f, sigma = %f, r = %f", mu, sigma, r)
         res = 0.00000001;
     }

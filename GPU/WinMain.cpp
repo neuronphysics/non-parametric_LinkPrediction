@@ -42,7 +42,7 @@ int main() {
     double s2H = 0.001;
     double alpha = 10;     // mass parameter for the Indian Buffet Process
     int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
-    int maxK = 20;          // maximum number of latent features for memory allocation
+    int maxK = 12;          // maximum number of latent features for memory allocation
     double missing = -1;
 
     // ---------------------------------- Load data from txt file -------------------------------------

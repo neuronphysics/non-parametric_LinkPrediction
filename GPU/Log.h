@@ -13,9 +13,9 @@
 #define OUTPUT_INFO 2
 #define OUTPUT_NORMAL 1
 
-#define DATASET_NAME "_800_7_withH"
+#define DATASET_NAME "_2000_5_withH"
 
-#define VERSION_DECLARE "Test new 800 with optimization\n"
+#define VERSION_DECLARE "Test new 1500 with optimizations\n"
 
 #define LOG(level, fmt, ...) \
         if(OUTPUT_LEVEL >= level){ \

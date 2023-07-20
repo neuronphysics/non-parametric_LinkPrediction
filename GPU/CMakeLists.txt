@@ -11,8 +11,8 @@ target_link_libraries(glfm_cuda_acc GSL::gsl GSL::gslcblas)
 
 
 find_package(CUDAToolkit)
-target_link_libraries(glfm_cuda_acc ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES} CUDA::cusolver)
-
+#target_link_libraries(glfm_cuda_acc ${CUDA_CUBLAS_LIBRARIES} ${CUDA_LIBRARIES} CUDA::cusolver)
+target_link_libraries(glfm_cuda_acc ${CUDA_LIBRARIES})
 
 set_target_properties(glfm_cuda_acc PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON)

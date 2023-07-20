@@ -10,7 +10,7 @@ using namespace std;
  * */
 
 int getArraySize(const string &s, const int s_length) {
-    char * c = new char[s_length + 1];
+    char *c = new char[s_length + 1];
 
     strcpy(c, s.c_str());
     int counter = 0;
@@ -62,7 +62,7 @@ int main() {
     ifstream attributeIn(filePath + attrFileName + dataSetName);
 
     // check if the file open properly
-    if(!adjIn.is_open() || !attributeIn.is_open()){
+    if (!adjIn.is_open() || !attributeIn.is_open()) {
         LOG(OUTPUT_NORMAL, "Open file fail")
         return 1;
     }
