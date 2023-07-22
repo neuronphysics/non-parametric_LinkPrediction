@@ -39,7 +39,7 @@ int main() {
     int bias = 1;           // 1 = fix first feature to be active for all patients
     double s2u = 0.005;     // auxiliary noise
     double s2B = 0.2;       // noise variance for feature values
-    double s2H = 0.001;
+    double s2H = 0.1;
     double alpha = 10;     // mass parameter for the Indian Buffet Process
     int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
     int maxK = 20;          // maximum number of latent features for memory allocation

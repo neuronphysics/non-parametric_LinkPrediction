@@ -732,6 +732,7 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         print_matrix(MuH, "Mu H matrix");
         print_matrix(&Q_view.matrix, "Q matrix");
         print_matrix((const gsl_matrix **) B, "B matrix", D, Kest);
+        print_matrix(&Z_view.matrix, "Z matrix");
 
 
         // sample_rho
