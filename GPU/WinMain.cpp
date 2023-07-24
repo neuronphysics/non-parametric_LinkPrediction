@@ -1,5 +1,5 @@
 #include "ExtendFunction.h"
-
+#include "UnitTest.h"
 using namespace std;
 
 /**
@@ -26,7 +26,12 @@ int getArraySize(const string &s, const int s_length) {
 }
 
 
+
+
 int main() {
+    testQComputation();
+    return 1;
+
     LOG(OUTPUT_NORMAL, "Version description:")
     LOG(OUTPUT_NORMAL, VERSION_DECLARE)
 
@@ -63,7 +68,7 @@ int main() {
     ifstream attributeIn(attrFileName);
 
     // check if the file open properly
-    if(!adjIn.is_open() || !attributeIn.is_open()){
+    if (!adjIn.is_open() || !attributeIn.is_open()) {
         LOG(OUTPUT_NORMAL, "Open file fail")
         return 1;
     }

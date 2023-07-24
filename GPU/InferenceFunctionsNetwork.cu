@@ -740,7 +740,10 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
 
         // sample the variance of Rho and H
         gsl_matrix2vector(vecRho, Rho);
-        s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
+
+        // target H is 0.2, Rho is 0.1
+//        s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
+        s2Rho = 0.1;
 
         s2H = sample_s2H(Kest, vecH, seed);
 
