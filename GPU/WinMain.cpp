@@ -49,7 +49,7 @@ int main() {
 
     // ---------------------------------- Load data from txt file -------------------------------------
     string dataSetName = DATASET_NAME;
-    init_util_functions(dataSetName);
+    init_util_functions(dataSetName, "test_1");
     string filePath = R"(E:\clion projects\non-parametric_LinkPrediction\GPU\dataSet\)";
     string adjFileName = "Adjacency_matrix";
     string attrFileName = "Attribute_matrix";

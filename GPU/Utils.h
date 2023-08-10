@@ -87,7 +87,7 @@ void rank_one_update_eta(int K, int N, int n, gsl_matrix *Z, gsl_matrix *zn, gsl
                          gsl_matrix *Etanon);
 
 
-void init_util_functions(const std::string &exeName);
+void init_util_functions(const std::string &exeName, const std::string &detail);
 
 int factorial(int N);
 
