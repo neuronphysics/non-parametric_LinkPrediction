@@ -354,7 +354,7 @@ double sample_s2Y(double missing, int N, int d, int K, char Cd, int Rd, double f
 double
 sample_s2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl_matrix *vecH, const gsl_rng *seed) {
     double a = 1;
-    double b = 1;
+    double b = 0.5;
 
     gsl_matrix *aux = gsl_matrix_calloc(N * N, 1);
     gsl_matrix *S = gsl_matrix_calloc(K * K, N * N);
@@ -369,7 +369,7 @@ sample_s2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl
     matrix_multiply(aux, aux, D, 1, 0, CblasTrans, CblasNoTrans);
 
 
-    double precision = gsl_ran_gamma(seed, a + N * N / 2., 1 / (b + gsl_matrix_get(D, 0, 0) / 2.));//???????
+    double precision = gsl_ran_gamma(seed, a + N * N / 2.,  b / (1 + b * gsl_matrix_get(D, 0, 0) / 2));//???????
     gsl_matrix_free(aux);
     gsl_matrix_free(S);
     gsl_matrix_free(D);

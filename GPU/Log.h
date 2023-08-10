@@ -13,9 +13,9 @@
 #define OUTPUT_INFO 2
 #define OUTPUT_NORMAL 1
 
-#define DATASET_NAME "_2000_5_withH"
+#define DATASET_NAME "_1500_7_withH"
 
-#define VERSION_DECLARE "Try 2000-5 again with fixed s2Rho\n"
+#define VERSION_DECLARE "Parameter search test 1\n"
 
 #define LOG(level, fmt, ...) \
         if(OUTPUT_LEVEL >= level){ \

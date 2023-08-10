@@ -305,14 +305,9 @@ double init_likelihood_given_znk(int D,
 ) {
     double likelihood = 0;
     gsl_matrix *s2y_p = gsl_matrix_calloc(1, 1);
-    for (
-            int d = 0;
-            d < D;
-            d++) {
-        gsl_matrix_set(s2y_p,
-                       0, 0, s2Y[d]);
-        matrix_multiply(aux, Zn, s2y_p,
-                        1, 1, CblasNoTrans, CblasNoTrans);
+    for (int d = 0; d < D; d++) {
+        gsl_matrix_set(s2y_p, 0, 0, s2Y[d]);
+        matrix_multiply(aux, Zn, s2y_p, 1, 1, CblasNoTrans, CblasNoTrans);
         double s2y_num = gsl_matrix_get(s2y_p, 0, 0);
         const gsl_matrix_view Ydn = gsl_matrix_submatrix(Y[d], 0, n, R[d], 1);
         const gsl_matrix_view Lnon_view = gsl_matrix_submatrix(lambdanon[d], 0, 0, K, R[d]);
@@ -377,7 +372,7 @@ void log_likelihood_Rho(int N,
 
     gsl_Kronecker_product(S, zn, Znon);
 
-    // SQnon = s{-n} * Qnon
+    // SQnon = S * Qnon
     matrix_multiply(S, &Q_view.matrix, SQnon, 1, 0, CblasTrans, CblasNoTrans);
 
 

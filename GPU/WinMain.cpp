@@ -29,9 +29,6 @@ int getArraySize(const string &s, const int s_length) {
 
 
 int main() {
-    testQComputation();
-    return 1;
-
     LOG(OUTPUT_NORMAL, "Version description:")
     LOG(OUTPUT_NORMAL, VERSION_DECLARE)
 
