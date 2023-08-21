@@ -35,17 +35,22 @@ int main() {
     char NETin = 'b';
     int N;
     int D;
-    // k need to be larger than 1
-    int K = 3;
+    int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
+    double missing = -1;
+
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
-    double s2u = 0.005;     // auxiliary noise
+    double s2u = 0.01;     // auxiliary noise
     double s2B = 0.2;       // noise variance for feature values
-    double s2H = 0.001;
+    double s2H = 0.1;
     double alpha = 10;     // mass parameter for the Indian Buffet Process
-    int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
-    int maxK = 12;          // maximum number of latent features for memory allocation
-    double missing = -1;
+    int maxK = 20;          // maximum number of latent features for memory allocation
+    // k need to be larger than 1
+    int K = 3;
+    double zeroPartOfZ = 0.4;
+    double s2Rho = 0.0025;
+
+
 
     // ---------------------------------- Load data from txt file -------------------------------------
     string dataSetName = DATASET_NAME;
@@ -152,8 +157,8 @@ int main() {
     auto *Z = new double[K * N];
     for (int i = 0; i < K; i++) {
         for (int j = 0; j < N; j++) {
-            random = rand() % 5;
-            if (random <= 1) {
+            random = rand() % 100;
+            if (random <= 100 * zeroPartOfZ) {
                 // 40 % chance 0
                 Z[i * N + j] = 0.0;
             } else {
@@ -186,7 +191,7 @@ int main() {
     delete[] c;
 
     infer(X, Cin, Z, NETin, (double *) A, Fin, N, D, K, F,
-          bias, s2u, s2B, s2H, alpha, Nsim,
+          bias, s2u, s2B, s2H, s2Rho, alpha, Nsim,
           maxK, missing);
 
     delete[] X;

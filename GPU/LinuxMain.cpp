@@ -26,28 +26,36 @@ int getArraySize(const string &s, const int s_length) {
 }
 
 
-int main() {
+int main(int argc, char *argv[]) {
     LOG(OUTPUT_NORMAL, "Version description:")
     LOG(OUTPUT_NORMAL, VERSION_DECLARE)
 
     char NETin = 'b';
     int N;
     int D;
-    // k need to be larger than 1
-    int K = 3;
+    int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
+    double missing = -1;
+
     double F = 1.0;
     int bias = 1;           // 1 = fix first feature to be active for all patients
-    double s2u = 0.01;     // auxiliary noise
-    double s2B = 0.2;       // noise variance for feature values
-    double s2H = 0.1;
-    double alpha = 10;     // mass parameter for the Indian Buffet Process
-    int Nsim = 1000;        // number of algorithm iterations (for Gibbs sampler)
-    int maxK = 20;          // maximum number of latent features for memory allocation
-    double missing = -1;
+
+    if(argc != 10){
+        printf("Wrong number of arguments!\n");
+        return 1;
+    }
+
+    double s2u = stod(argv[1]);         // auxiliary noise
+    double s2B = stod(argv[2]);         // noise variance for feature values
+    double s2H = stod(argv[3]);
+    double alpha = stod(argv[4]);       // mass parameter for the Indian Buffet Process
+    int maxK = stoi(argv[5]);           // maximum number of latent features for memory allocation
+    int K = stoi(argv[6]);              // k need to be larger than 1
+    double zeroPartOfZ = stod(argv[7]);
+    double s2Rho = stod(argv[8]);
 
     // ---------------------------------- Load data from txt file -------------------------------------
     string dataSetName = DATASET_NAME;
-    init_util_functions(dataSetName, "test_1");
+    init_util_functions(dataSetName, argv[9]);
     string filePath = R"(dataSet/)";
     string adjFileName = "Adjacency_matrix";
     string attrFileName = "Attribute_matrix";
@@ -148,8 +156,8 @@ int main() {
     auto *Z = new double[K * N];
     for (int i = 0; i < K; i++) {
         for (int j = 0; j < N; j++) {
-            random = rand() % 5;
-            if (random <= 1) {
+            random = rand() % 100;
+            if (random <= 100 * zeroPartOfZ) {
                 // 40 % chance 0
                 Z[i * N + j] = 0.0;
             } else {
@@ -182,7 +190,7 @@ int main() {
     delete[] c;
 
     infer(X, Cin, Z, NETin, (double *) A, Fin, N, D, K, F,
-          bias, s2u, s2B, s2H, alpha, Nsim,
+          bias, s2u, s2B, s2H, s2Rho, alpha, Nsim,
           maxK, missing);
 
     delete[] X;

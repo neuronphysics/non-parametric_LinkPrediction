@@ -48,8 +48,9 @@ Function to call inference routine for GLFM model from Python code
 
 void
 infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin, int N, int D, int K, double F,
-      int bias, double s2u, double s2B, double s2H, double alpha, int Nsim, int maxK, double missing) {
-    LOG(OUTPUT_NORMAL, "N=%d, D=%d, K=%d, s2u=%f, s2B=%f, s2H=%f, alpha=%f", N, D, K, s2u, s2B, s2H, alpha)
+      int bias, double s2u, double s2B, double s2H, double s2Rho, double alpha, int Nsim, int maxK, double missing) {
+    LOG(OUTPUT_NORMAL, "N=%d, D=%d, K=%d, maxK=%d, s2u=%f, s2B=%f, s2H=%f, s2Rho=%f, alpha=%f", N, D, K, maxK, s2u, s2B,
+        s2H, s2Rho, alpha)
 
     gsl_matrix_view Xview, Zview, Aview;
     gsl_matrix *X, *A, *Z;
@@ -67,13 +68,6 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     // Determine the type of Adjacency matrix whether it is a binary matrix or matrix contains positive weights of each edge
     char Net[1];
     Net[0] = (char) tolower(NETin);
-
-    double s2Rho;
-    if (Net[0] == 'w') {
-        s2Rho = 0.5;
-    } else {
-        s2Rho = 0.0025;
-    }
 
 
     // gsl_matrix_view_array takes 1-D array
@@ -109,8 +103,8 @@ infer(double *Xin, char *Cin, double *Zin, char NETin, double *Ain, double *Fin,
     LOG(OUTPUT_DEBUG, "Initialize done, maxR = %d", maxR);
 
     int Kest = IBP_sampler_func(missing, X, C, Net, Z, B, theta,
-                               H, A, R, &Fin[0], F, &mu[0], &w[0],
-                               maxR, bias, N, D, K, alpha, s2B, &s2Y[0], s2Rho, s2H, s2u, maxK, Nsim);
+                                H, A, R, &Fin[0], F, &mu[0], &w[0],
+                                maxR, bias, N, D, K, alpha, s2B, &s2Y[0], s2Rho, s2H, s2u, maxK, Nsim);
     LOG(OUTPUT_DEBUG, "\nExit IBP sampler\n");
 
 
