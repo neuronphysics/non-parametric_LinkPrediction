@@ -384,7 +384,7 @@ void log_likelihood_Rho(int N,
     // by here we have Qnon^-1 + s^Ts
     matrix_multiply(S, S, Qss, 1, 1, CblasNoTrans, CblasTrans);
     double detP = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) +
-                  lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2);
+                  lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2) + log(s2Rho);
 
     inverse(Qss);
     gsl_matrix *sQss = gsl_matrix_calloc(N - 1, K * K);
@@ -422,7 +422,7 @@ void log_likelihood_Rho(int N,
     // Val = (rho_{n,-n} - h^T) * P * (rho_{n,-n} - h^T)
     matrix_multiply(aux, Rho_non, Val, 1, 0, CblasNoTrans, CblasTrans);
 
-    lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + detP);
+    lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + (N - 1) * detP);
 
     if (isnan(lik)) {
         LOG(OUTPUT_NORMAL, "Val = %f, detP = %f", gsl_matrix_get(Val, 0, 0), detP)
@@ -442,29 +442,29 @@ void log_likelihood_Rho(int N,
 
 // Functions section 3.1
 int accelerated_gibbs(int maxK,              //  max number of latent features
-                     int bias,              //  the index of actual feature, also you can treat it as the number of random feature
-                     int N,                 //  number of users
-                     int D,                 //  number of attributes
-                     int K,                 //  current number of features
-                     char *C,               //  data type of each attribute
-                     int *R,                //  the number of categories in each discrete attribute
-                     double alpha,          //  the concentration parameter
-                     double s2B,            //  variance of the weighting matrix??
-                     double *s2Y,           //  noise variance of the pseudo-observation of the attribute matrix
-                     double s2H,            //  variance of the affinity matrix
-                     double s2Rho,          //  noise variance of the pseudo-observation of the adjacency matrix
-                     gsl_matrix **Y,        //  the pseudo-observation matrix of the affinity matrix (the auxiliary Gaussian variable)
-                     gsl_matrix *Rho,       //  the pseudo-observation matrix of the adjacency matrix,
-                     gsl_matrix *Z,         //  the IBP latent feature matrix
-                     int *nest,             //  nest[i] defines number of 1s at ith feature of Z matrix
-                     gsl_matrix *P,         //  P = Z^T Z + 1./s2B
-                     gsl_matrix *Pnon,      //  P_{-n} = P - z_{n}^T z_{n}
-                     gsl_matrix **lambda,   //  Lambda_r^d=Z^T y_r^d
-                     gsl_matrix **lambdanon,//  Lambdanon_r^d{-n}=Lambda_r^d-Z_{n}^T y_{nr}^d
-                     gsl_matrix *Q,         //  Q {K^2xK^2}=[(S^T S) + s2Rho/s2H]^{-1}]
-                     gsl_matrix *Qnon,      //  Q_{-n} = [Q^{-1} - (S_{n}^T S_{n})]^{-1}
-                     gsl_matrix *eta,       //  eta {K^2x1}=(Z kron Z)^T vec(Rho)
-                     gsl_matrix *etanon     //  eta_{-n}=(Znon kron Znon) vec(Rhonon)
+                      int bias,              //  the index of actual feature, also you can treat it as the number of random feature
+                      int N,                 //  number of users
+                      int D,                 //  number of attributes
+                      int K,                 //  current number of features
+                      char *C,               //  data type of each attribute
+                      int *R,                //  the number of categories in each discrete attribute
+                      double alpha,          //  the concentration parameter
+                      double s2B,            //  variance of the weighting matrix??
+                      double *s2Y,           //  noise variance of the pseudo-observation of the attribute matrix
+                      double s2H,            //  variance of the affinity matrix
+                      double s2Rho,          //  noise variance of the pseudo-observation of the adjacency matrix
+                      gsl_matrix **Y,        //  the pseudo-observation matrix of the affinity matrix (the auxiliary Gaussian variable)
+                      gsl_matrix *Rho,       //  the pseudo-observation matrix of the adjacency matrix,
+                      gsl_matrix *Z,         //  the IBP latent feature matrix
+                      int *nest,             //  nest[i] defines number of 1s at ith feature of Z matrix
+                      gsl_matrix *P,         //  P = Z^T Z + 1./s2B
+                      gsl_matrix *Pnon,      //  P_{-n} = P - z_{n}^T z_{n}
+                      gsl_matrix **lambda,   //  Lambda_r^d=Z^T y_r^d
+                      gsl_matrix **lambdanon,//  Lambdanon_r^d{-n}=Lambda_r^d-Z_{n}^T y_{nr}^d
+                      gsl_matrix *Q,         //  Q {K^2xK^2}=[(S^T S) + s2Rho/s2H]^{-1}]
+                      gsl_matrix *Qnon,      //  Q_{-n} = [Q^{-1} - (S_{n}^T S_{n})]^{-1}
+                      gsl_matrix *eta,       //  eta {K^2x1}=(Z kron Z)^T vec(Rho)
+                      gsl_matrix *etanon     //  eta_{-n}=(Znon kron Znon) vec(Rhonon)
 ) {
     int TK = 2;
     gsl_matrix_view Zn;
@@ -658,7 +658,7 @@ int accelerated_gibbs(int maxK,              //  max number of latent features
 
             // compute new Etanon
             Enon_view = gsl_matrix_submatrix(etanon, 0, 0, K * K, 1);
-            rank_one_update_eta(K, N, n, &Z_view.matrix, &Zn.matrix, Rho, &Eta_view.matrix ,&Enon_view.matrix);
+            rank_one_update_eta(K, N, n, &Z_view.matrix, &Zn.matrix, Rho, &Eta_view.matrix, &Enon_view.matrix);
 
             gsl_matrix_free(Znon);
             LOG(OUTPUT_DEBUG, "End of updating parameters");
