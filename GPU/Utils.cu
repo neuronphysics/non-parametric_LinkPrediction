@@ -534,7 +534,7 @@ void print_matrix(const gsl_matrix **matrix, const string &name, int rowNum, int
 void init_util_functions(const string &exeName, const std::string &detail) {
     timeSeed = chrono::high_resolution_clock::now().time_since_epoch().count();
     string fileName = exeName.substr(0, exeName.find('.'));
-    if(!detail.empty()){
+    if (!detail.empty()) {
         fileName = fileName + "_" + detail;
     }
     matrixOut.open(fileName + "_matrix_log");

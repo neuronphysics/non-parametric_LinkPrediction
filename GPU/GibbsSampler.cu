@@ -76,7 +76,7 @@ int parallel_sample_znk(int N,
                         const int *R,
                         gsl_matrix *Zn,
                         gsl_matrix *Qnon,       // read only
-                        const gsl_matrix *Enon,
+                        gsl_matrix *Enon,
                         const gsl_matrix *Snon,
                         const gsl_matrix *Znon,
                         const gsl_matrix *Rho,
@@ -162,7 +162,7 @@ void compute_pseudo_likelihood_given_znk(int D,
                                          const char *C,
                                          const int *R,
                                          const gsl_matrix *Zn,
-                                         const gsl_matrix *Enon,
+                                         gsl_matrix *Enon,
                                          const gsl_matrix *Snon,
                                          const gsl_matrix *Znon,
                                          const gsl_matrix *Rho,
@@ -222,7 +222,7 @@ void sample_znk(int N,
                 double *p,
                 gsl_matrix *Zn,
                 gsl_matrix *Qnon,       // read only
-                const gsl_matrix *Enon,
+                gsl_matrix *Enon,
                 const gsl_matrix *Snon,
                 const gsl_matrix *Znon,
                 const gsl_matrix *Rho,
@@ -362,47 +362,25 @@ void log_likelihood_Rho(int N,
                         const gsl_matrix *zn,   // read only
                         const gsl_matrix *Rho,  // read only
                         gsl_matrix *Qnon,       // read only
-                        const gsl_matrix *Enon,  // read only
+                        gsl_matrix *Enon,       // read only
                         double s2Rho,
                         double &lik) {
-    gsl_matrix *mu = gsl_matrix_calloc(N - 1, 1);// (Z_{-n} Kronecker_Product Zn ) Qnon . Snon. vec(Rho_n)
-    const gsl_matrix_view Q_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
-    gsl_matrix *SQnon = gsl_matrix_calloc(N - 1, K * K);//(Znon Kron Zn)(Snon^T Snon+beta I)^{-1}
-    gsl_matrix *S = gsl_matrix_calloc(K * K, N - 1);//S=(Z_{-n} Kronecker_Product Zn )
+    const gsl_matrix_view Qnon_view = gsl_matrix_submatrix(Qnon, 0, 0, K * K, K * K);
+    const gsl_matrix_view Enon_view = gsl_matrix_submatrix(Enon, 0, 0, K * K, 1);
 
-    gsl_Kronecker_product(S, zn, Znon);
-
-    // SQnon = S * Qnon
-    matrix_multiply(S, &Q_view.matrix, SQnon, 1, 0, CblasTrans, CblasNoTrans);
-
-
-
-    // use woodbury formula
-    gsl_matrix *Qss = gsl_matrix_calloc(Q_view.matrix.size1, Q_view.matrix.size2);
-    gsl_matrix_memcpy(Qss, &Q_view.matrix);
-    inverse(Qss);
-    // by here we have Qnon^-1 + s^Ts
-    matrix_multiply(S, S, Qss, 1, 1, CblasNoTrans, CblasTrans);
-    double detP = lndet_get(Qss, Q_view.matrix.size1, Q_view.matrix.size2) +
-                  lndet_get(&Q_view.matrix, Qnon->size1, Qnon->size2) + log(s2Rho);
-
-    inverse(Qss);
-    gsl_matrix *sQss = gsl_matrix_calloc(N - 1, K * K);
+    gsl_matrix *h_t = gsl_matrix_calloc(1, N - 1);
+    gsl_matrix *s_t = gsl_matrix_calloc(K * K, N - 1);
     gsl_matrix *invSigma = gsl_matrix_calloc(N - 1, N - 1);
-    gsl_matrix_set_identity(invSigma);
-    matrix_multiply(S, Qss, sQss, 1, 0, CblasTrans, CblasNoTrans);
-    // identity = I - s(Q + ss)s^T
-    matrix_multiply(sQss, S, invSigma, -1, 1, CblasNoTrans, CblasNoTrans);
-    gsl_matrix_scale(invSigma, 1 / s2Rho);
-
-
-    //compute the mean
-    matrix_multiply(SQnon, Enon, mu, 1, 0, CblasNoTrans, CblasNoTrans);
-    //compute the likelihood
+    gsl_matrix *Qss = gsl_matrix_calloc(K * K, K * K);
+    gsl_matrix *sQss = gsl_matrix_calloc(N - 1, K * K);
     gsl_matrix *aux = gsl_matrix_calloc(1, N - 1);
+    gsl_matrix *Rho_non = gsl_matrix_calloc(1, N - 1);
+    gsl_matrix *Val = gsl_matrix_calloc(1, 1);
+    gsl_matrix *sQnon = gsl_matrix_calloc(N - 1, K * K);
+
+    gsl_Kronecker_product(s_t, zn, Znon);
 
     //vector rho_{n,-n}
-    gsl_matrix *Rho_non = gsl_matrix_calloc(1, N - 1);
     int m = 0;
     for (int n = 0; n < N; n++) {
         if (n != r) {
@@ -411,29 +389,43 @@ void log_likelihood_Rho(int N,
         }
     }
 
-    gsl_matrix *mu_tran = gsl_matrix_calloc(1, N - 1);
-    gsl_matrix_transpose_memcpy(mu_tran, mu);
-    // res = rho_{n,-n} - h^T
-    gsl_matrix_sub(Rho_non, mu_tran);
+    // use Woodbury formula
+    gsl_matrix_memcpy(Qss, &Qnon_view.matrix);
+    // Qss holds Q^{-1}
+    inverse(Qss);
+    // by here we have Qnon^-1 + s^Ts
+    matrix_multiply(s_t, s_t, Qss, 1, 1, CblasNoTrans, CblasTrans);
+    double logDetSigma = (lndet_get(Qss, K * K, K * K) + lndet_get(&Qnon_view.matrix, K * K, K * K) + (N - 1) * log(s2Rho));
 
-    // aux = (rho_{n,-n} - h^T) * P
+    inverse(Qss);
+    gsl_matrix_set_identity(invSigma);
+    matrix_multiply(s_t, Qss, sQss, 1, 0, CblasTrans, CblasNoTrans);
+    // invSigma = I - s(Q + ss)s^T
+    matrix_multiply(sQss, s_t, invSigma, -1, 1, CblasNoTrans, CblasNoTrans);
+    gsl_matrix_scale(invSigma, 1 / s2Rho);
+
+
+    // compute the mean
+    matrix_multiply(s_t, &Qnon_view.matrix, sQnon, 1, 0, CblasTrans, CblasNoTrans);
+    matrix_multiply(&Enon_view.matrix, sQnon, h_t, 1, 0, CblasTrans, CblasTrans);
+
+    // res = rho_{n,-n} - h^T
+    gsl_matrix_sub(Rho_non, h_t);
+    // aux = (rho_{n,-n} - h^T) * InvSigma
     matrix_multiply(Rho_non, invSigma, aux, 1, 0, CblasNoTrans, CblasNoTrans);
-    gsl_matrix *Val = gsl_matrix_calloc(1, 1);
-    // Val = (rho_{n,-n} - h^T) * P * (rho_{n,-n} - h^T)
+    // Val = (rho_{n,-n} - h^T) * InvSigma * (rho_{n,-n} - h^T)
     matrix_multiply(aux, Rho_non, Val, 1, 0, CblasNoTrans, CblasTrans);
 
-    lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + (N - 1) * detP);
+    lik -= 0.5 * (gsl_matrix_get(Val, 0, 0) + (N - 1) * gsl_sf_log(2 * M_PI) + logDetSigma);
 
     if (isnan(lik)) {
-        LOG(OUTPUT_NORMAL, "Val = %f, detP = %f", gsl_matrix_get(Val, 0, 0), detP)
+        LOG(OUTPUT_NORMAL, "Val = %f, detP = %f", gsl_matrix_get(Val, 0, 0), logDetSigma)
     }
 
-    gsl_matrix_free(mu);
-    gsl_matrix_free(SQnon);
-    gsl_matrix_free(S);
+    gsl_matrix_free(s_t);
     gsl_matrix_free(aux);
     gsl_matrix_free(Rho_non);
-    gsl_matrix_free(mu_tran);
+    gsl_matrix_free(h_t);
     gsl_matrix_free(Val);
     gsl_matrix_free(Qss);
     gsl_matrix_free(sQss);
