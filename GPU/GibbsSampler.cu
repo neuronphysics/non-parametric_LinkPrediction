@@ -430,6 +430,7 @@ void log_likelihood_Rho(int N,
     gsl_matrix_free(Qss);
     gsl_matrix_free(sQss);
     gsl_matrix_free(invSigma);
+    gsl_matrix_free(sQnon);
 }
 
 // Functions section 3.1
