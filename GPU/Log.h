@@ -15,7 +15,7 @@
 
 #define DATASET_NAME "_2000_5_withH"
 
-#define VERSION_DECLARE "Parameter search with log likelihood changed\n"
+#define VERSION_DECLARE "Parameter search with Rho variance fixed\n"
 
 #define LOG(level, fmt, ...) \
         if(OUTPUT_LEVEL >= level){ \

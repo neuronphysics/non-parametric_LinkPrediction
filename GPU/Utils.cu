@@ -548,9 +548,11 @@ void matrix_compare(const gsl_matrix *A, const gsl_matrix *B) {
                 cout << "different res at " << "[" << to_string(i) << "," << to_string(j) << "]  "
                      << to_string(gsl_matrix_get(A, i, j)) << "  "
                      << to_string(gsl_matrix_get(B, i, j)) << endl;
+                return;
             }
         }
     }
+    cout << "Matrix are identical\n";
 }
 
 void compute_full_eta(const gsl_matrix *Z, const gsl_matrix *Rho, gsl_matrix *eta) {
@@ -632,4 +634,18 @@ void rank_one_update_eta(int K, int N, int n, gsl_matrix *Z, gsl_matrix *zn, gsl
     delete[] znkZ;
     delete[] Zkzn;
     delete[] znkzn;
+}
+
+void normal_update_eta(int n, gsl_matrix * Znon, gsl_matrix *Rho, gsl_matrix *Etanon) {
+    gsl_matrix *rhocy = gsl_matrix_alloc(Rho->size1, Rho->size2);
+    gsl_matrix_memcpy(rhocy, Rho);
+
+    for (int i = n; i < Rho->size1 - 1; i++) {
+        gsl_matrix_swap_rows(rhocy, i, i + 1);
+        gsl_matrix_swap_columns(rhocy, i, i + 1);
+    }
+    gsl_matrix_view rho_n_n = gsl_matrix_submatrix(rhocy, 0, 0, Rho->size1 - 1, Rho->size2 - 1);
+
+    compute_full_eta(Znon, &rho_n_n.matrix, Etanon);
+    gsl_matrix_free(rhocy);
 }
