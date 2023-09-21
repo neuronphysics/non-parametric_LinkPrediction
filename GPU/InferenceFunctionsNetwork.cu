@@ -742,9 +742,8 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         gsl_matrix2vector(vecRho, Rho);
 
         // target H is 0.2, Rho is 0.1
-        if(Net[0] != 'b'){
-            s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
-        }
+        s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
+
 
         s2H = sample_s2H(Kest, vecH, seed);
 
