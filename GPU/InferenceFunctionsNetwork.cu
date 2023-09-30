@@ -5,8 +5,8 @@ using namespace std;
 
 void
 sample_Y(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2Y, double s2u,
-        double s2theta, gsl_matrix *X, gsl_matrix *Z, gsl_matrix *Yd, gsl_matrix *Bd, gsl_vector *thetad,
-        const gsl_rng *seed) {
+         double s2theta, gsl_matrix *X, gsl_matrix *Z, gsl_matrix *Yd, gsl_matrix *Bd, gsl_vector *thetad,
+         const gsl_rng *seed) {
     double sYd = sqrt(s2Y);
     double stheta = sqrt(s2theta);
     gsl_matrix_view Zn;
@@ -184,20 +184,16 @@ sample_Y(double missing, int N, int d, int K, char Cd, int Rd, double fd, double
 }
 
 void parallel_sample_binary_rho(int N, int K, int start, int end, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *Rho,
-                             gsl_matrix *vecH, const gsl_rng *seed,
-                             double sRho, double missing) {
-    gsl_matrix *ZmT = gsl_matrix_calloc(1, K);
-    gsl_matrix *ZnT = gsl_matrix_calloc(1, K);
-    gsl_matrix *aux = gsl_matrix_calloc(1, K * K);
+                                gsl_matrix *vecH, const gsl_rng *seed,
+                                double sRho, double missing) {
+    gsl_matrix *aux = gsl_matrix_calloc(K * K, 1);
     gsl_matrix *mu_rho = gsl_matrix_calloc(1, 1);
     for (int row = start; row < end; row++) {
         gsl_matrix_view Zm = gsl_matrix_submatrix(Z, 0, row, K, 1);
         for (int col = row; col < N; col++) {
             gsl_matrix_view Zn = gsl_matrix_submatrix(Z, 0, col, K, 1);
-            gsl_matrix_transpose_memcpy(ZnT, &Zn.matrix);
-            gsl_matrix_transpose_memcpy(ZmT, &Zm.matrix);
-            gsl_Kronecker_product(aux, ZnT, ZmT);
-            matrix_multiply(aux, vecH, mu_rho, 1, 0, CblasNoTrans, CblasNoTrans);
+            gsl_Kronecker_product(aux, &Zn.matrix, &Zm.matrix);
+            matrix_multiply(aux, vecH, mu_rho, 1, 0, CblasTrans, CblasNoTrans);
 
             int a_nm = (int) gsl_matrix_get(A, row, col);
             if (gsl_isnan(a_nm || a_nm == missing)) {
@@ -217,24 +213,22 @@ void parallel_sample_binary_rho(int N, int K, int start, int end, gsl_matrix *A,
     }
     gsl_matrix_free(mu_rho);
     gsl_matrix_free(aux);
-    gsl_matrix_free(ZmT);
-    gsl_matrix_free(ZnT);
 }
 
 
 // Sample Rho : pseudo-observation of the adjacency matrix
 void sample_rho(double missing,
-               int N,
-               int K,
-               char Ca,
-               double fa,
-               double s2Rho,
-               double s2u,
-               gsl_matrix *A,
-               gsl_matrix *Z,
-               gsl_matrix *Rho,
-               gsl_matrix *H,
-               const gsl_rng *seed) {
+                int N,
+                int K,
+                char Ca,
+                double fa,
+                double s2Rho,
+                double s2u,
+                gsl_matrix *A,
+                gsl_matrix *Z,
+                gsl_matrix *Rho,
+                gsl_matrix *H,
+                const gsl_rng *seed) {
     double sRho = sqrt(s2Rho);
     gsl_matrix_view Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
     gsl_matrix_view H_view = gsl_matrix_submatrix(H, 0, 0, K, K);
@@ -286,18 +280,19 @@ void sample_rho(double missing,
         gsl_matrix_free(aux);
         gsl_matrix_free(mu_rho);
     } else if (Ca == 'b') {
-        vector<thread*> threads;
+        vector<thread *> threads;
         int start = 0;
         int range = 30;
-        while(start < N){
+        while (start < N) {
             int end = min(start + range, N);
-            auto * t = new thread(parallel_sample_binary_rho, N, K, start, end, A, &Z_view.matrix, Rho, vecH, seed, sRho, missing);
+            auto *t = new thread(parallel_sample_binary_rho, N, K, start, end, A, &Z_view.matrix, Rho, vecH, seed, sRho,
+                                 missing);
             threads.emplace_back(t);
             start = end;
             range++;
         }
 
-        for(auto t : threads){
+        for (auto t: threads) {
             t->join();
             delete t;
         }
@@ -321,8 +316,8 @@ double sample_alpha(int Kplus, int N, const gsl_rng *seed) {
 }
 
 double sample_s2Y(double missing, int N, int d, int K, char Cd, int Rd, double fd, double mud, double wd, double s2u,
-                 double s2theta, gsl_matrix *X, gsl_matrix *Z, gsl_matrix *Yd, gsl_matrix *Bd, gsl_vector *thetad,
-                 const gsl_rng *seed) {
+                  double s2theta, gsl_matrix *X, gsl_matrix *Z, gsl_matrix *Yd, gsl_matrix *Bd, gsl_vector *thetad,
+                  const gsl_rng *seed) {
     double a = 2;
     double b = 2;
     gsl_matrix_view Zn;
@@ -353,7 +348,7 @@ double sample_s2Y(double missing, int N, int d, int K, char Cd, int Rd, double f
 // sample noise variance of the pseudo-observation of the adjacency matrix
 double
 sample_s2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl_matrix *vecH, const gsl_rng *seed) {
-    double a = 1;
+    double a = 2;
     double b = 0.5;
 
     gsl_matrix *aux = gsl_matrix_calloc(N * N, 1);
@@ -368,12 +363,38 @@ sample_s2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl
     gsl_matrix_sub(aux, vecRho);
     matrix_multiply(aux, aux, D, 1, 0, CblasTrans, CblasNoTrans);
 
+    printf("D = %f\n", gsl_matrix_get(D, 0, 0));
 
-    double precision = gsl_ran_gamma(seed, a + N * N / 2.,  b / (1 + b * gsl_matrix_get(D, 0, 0) / 2));//???????
+    double precision = gsl_ran_gamma(seed, a + N * N / 2., b / (1 + b * gsl_matrix_get(D, 0, 0) / 2));//???????
     gsl_matrix_free(aux);
     gsl_matrix_free(S);
     gsl_matrix_free(D);
     return 1. / precision;
+}
+
+double
+sample_s2Rho_trace(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *Rho, gsl_matrix *H, const gsl_rng *seed) {
+    double a = 2;
+    double b = 0.5;
+
+    gsl_matrix *aux = gsl_matrix_calloc(N, K);
+    gsl_matrix *D = gsl_matrix_calloc(N, N);
+
+    gsl_matrix_view Z_view = gsl_matrix_submatrix(Z, 0, 0, K, N);
+    gsl_matrix_view H_view = gsl_matrix_submatrix(H, 0, 0, K, K);
+
+    matrix_multiply(&Z_view.matrix, &H_view.matrix, aux, 1, 0, CblasTrans, CblasNoTrans);
+    matrix_multiply(aux, &Z_view.matrix, D, 1, 0, CblasNoTrans, CblasNoTrans);
+    gsl_matrix_sub(D, Rho);
+    matrix_multiply(D, D, D, 1, 0, CblasTrans, CblasNoTrans);
+    double trace = get_trace(D);
+
+    printf("Trace D = %f\n", trace);
+
+    double precision = gsl_ran_gamma(seed, a + N / 2., b / (1 + b * trace / 2.));//???????
+    gsl_matrix_free(aux);
+    gsl_matrix_free(D);
+    return precision;
 }
 
 
@@ -383,39 +404,60 @@ double sample_s2H(int K, gsl_matrix *vecH, const gsl_rng *seed) {
     gsl_matrix *var = gsl_matrix_calloc(1, 1);
 
     matrix_multiply(vecH, vecH, var, 1, 0, CblasTrans, CblasNoTrans);
+
+    printf("var H = %f\n", gsl_matrix_get(var, 0, 0));
+
     double precision = gsl_ran_gamma(seed, a + K * K / 2., b / (1 + b * gsl_matrix_get(var, 0, 0) / 2));
     gsl_matrix_free(var);
     return 1. / precision;
 }
 
+double sample_s2H_trace(int K, gsl_matrix *H, const gsl_rng *seed) {
+    double a = 2;
+    double b = 1;
+
+    gsl_matrix *aux = gsl_matrix_calloc(K, K);
+
+    gsl_matrix_view H_view = gsl_matrix_submatrix(H, 0, 0, K, K);
+
+    matrix_multiply(&H_view.matrix, &H_view.matrix, aux, 1, 0, CblasTrans, CblasNoTrans);
+    double trace = get_trace(aux);
+
+    printf("Trace H = %f\n", trace);
+
+    double precision = gsl_ran_gamma(seed, a + K / 2., b / (1 + b * trace / 2.));
+    gsl_matrix_free(aux);
+    return precision;
+}
+
 
 int IBP_sampler_func(double missing,     // how the missing data is defined
-                    gsl_matrix *X,      // user-attribute matrix, real observation of the users
-                    char *C,            // define the data type of each attribute
-                    char *Net,          // the type of network
-                    gsl_matrix *Z,      // the IBP latent feature matrix
-                    gsl_matrix **B,     // the weighting vectors D * maxK * 1, initially all 0
-                    gsl_vector **theta, // ?
-                    gsl_matrix *H,      // the homophilic matrix
-                    gsl_matrix *A,      // the adjacency matrix
-                    int *R,             // the number of categories in each discrete attribute
-                    double *f,          // mapping function from the real space R into the observation space
-                    double fa,          // ? used in weighted network
-                    double *mu,         // mean, mu[d] = mean(X[d]) the mean value of an attribute to all nodes
-                    double *w,          // ?
-                    int maxR,           // ? always 1
-                    int bias,           // the index of actual feature, also you can treat it as the number of random feature
-                    int N,              // number of users
-                    int D,              // number of attributes
-                    int K,              // initial number of features
-                    double alpha,       // the concentration parameter
-                    double s2B,         // variance of the weighting matrix??
-                    double *s2Y,        // noise variance of the pseudo-observation of the attribute matrix
-                    double s2Rho,       // noise variance of the pseudo-observation of the adjacency matrix
-                    double s2H,         // variance of the affinity matrix
-                    double s2u,         // auxiliary variance noise
-                    int maxK,           // max number of features
-                    int Nsim            // numbers of iterations for training
+                     gsl_matrix *X,      // user-attribute matrix, real observation of the users
+                     char *C,            // define the data type of each attribute
+                     char *Net,          // the type of network
+                     gsl_matrix *Z,      // the IBP latent feature matrix
+                     gsl_matrix **B,     // the weighting vectors D * maxK * 1, initially all 0
+                     gsl_vector **theta, // ?
+                     gsl_matrix *H,      // the homophilic matrix
+                     gsl_matrix *A,      // the adjacency matrix
+                     int *R,             // the number of categories in each discrete attribute
+                     double *f,          // mapping function from the real space R into the observation space
+                     double fa,          // ? used in weighted network
+                     double *mu,         // mean, mu[d] = mean(X[d]) the mean value of an attribute to all nodes
+                     double *w,          // ?
+                     int maxR,           // ? always 1
+                     int bias,           // the index of actual feature, also you can treat it as the number of random feature
+                     int N,              // number of users
+                     int D,              // number of attributes
+                     int K,              // initial number of features
+                     double alpha,       // the concentration parameter
+                     double s2B,         // variance of the weighting matrix??
+                     double *s2Y,        // noise variance of the pseudo-observation of the attribute matrix
+                     double s2Rho,       // noise variance of the pseudo-observation of the adjacency matrix
+                     double s2H,         // variance of the affinity matrix
+                     double s2u,         // auxiliary variance noise
+                     int maxK,           // max number of features
+                     int Nsim            // numbers of iterations for training
 ) {
     LOG(OUTPUT_INFO, "Running inference algorithm (currently inside C++ routine...)");
 
@@ -640,7 +682,7 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
     for (int it = 0; it < Nsim; it++) {
         print_iteration_num(it);
         int Kaux = accelerated_gibbs(maxK, bias, N, D, Kest, C, R, alpha, s2B, s2Y, s2H, s2Rho, Y, Rho, Z, nest,
-                                    P, Pnon, lambda, lambdanon, Q, Qnon, Eta, Etanon);
+                                     P, Pnon, lambda, lambdanon, Q, Qnon, Eta, Etanon);
 
         LOG(OUTPUT_NORMAL, "new K = %d", Kaux);
 
@@ -677,10 +719,10 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
 
             //Sample Y
             sample_Y(missing, N, d, Kest, C[d], R[d], f[d], mu[d], w[d], s2Y[d], s2u, s2theta, X, Z, Y[d], B[d],
-                    theta[d], seed);
+                     theta[d], seed);
             if (C[d] != 'c' && C[d] != 'o') {
                 double aux = sample_s2Y(missing, N, d, Kest, C[d], R[d], f[d], mu[d], w[d], s2u, s2theta, X, Z, Y[d],
-                                       B[d], theta[d], seed);
+                                        B[d], theta[d], seed);
                 if (aux != 0 && !isinf(aux) && !isnan(aux)) {
                     s2Y[d] = aux;
                 } else {
@@ -715,8 +757,6 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
 
         mvnrnd(&vecH_view.vector, &Q_view.matrix, &MuH_view.vector, Kest * Kest, seed);
 
-        gsl_vector2matrix(vecH, &H_view.matrix);
-
 
         // make H matrix symmetrical
         print_matrix(&H_view.matrix, "H matrix before sym");
@@ -725,15 +765,14 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         gsl_matrix_add(&H_view.matrix, H_lower_triangular);
         gsl_matrix_scale(&H_view.matrix, 0.5);
         gsl_matrix_free(H_lower_triangular);
-
+        gsl_vector2matrix(vecH, &H_view.matrix);
 
         print_matrix(&Eta_view.matrix, "Eta matrix", Kest);
+        print_matrix((const gsl_matrix **) B, "B matrix", D, Kest);
         print_matrix(&H_view.matrix, "new H matrix");
         print_matrix(MuH, "Mu H matrix");
-        print_matrix(&Q_view.matrix, "Q matrix");
-        print_matrix((const gsl_matrix **) B, "B matrix", D, Kest);
         print_matrix(&Z_view.matrix, "Z matrix");
-
+        print_matrix(&Q_view.matrix, "Q matrix");
 
         // sample_rho
         sample_rho(missing, N, Kest, Net[0], fa, s2Rho, s2u, A, Z, Rho, &H_view.matrix, seed);
@@ -742,17 +781,18 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         gsl_matrix2vector(vecRho, Rho);
 
         // target H is 0.2, Rho is 0.1
-        s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
+//        s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
+        s2Rho = sample_s2Rho_trace(N, Kest, A, Z, Rho, H, seed);
 
-
-        s2H = sample_s2H(Kest, vecH, seed);
+//        s2H = sample_s2H(Kest, vecH, seed);
+        s2H = sample_s2H_trace(Kest, H, seed);
 
         alpha = sample_alpha(Kest, N, seed);
 
         LOG(OUTPUT_INFO, "");
-        LOG(OUTPUT_INFO, "s2_rho --> %.3f", s2Rho);
-        LOG(OUTPUT_INFO, "s2_h   --> %.3f", s2H);
-        LOG(OUTPUT_INFO, "alpha  --> %.3f", alpha);
+        LOG(OUTPUT_INFO, "s2_rho --> %.7f", s2Rho);
+        LOG(OUTPUT_INFO, "s2_h   --> %.7f", s2H);
+        LOG(OUTPUT_INFO, "alpha  --> %.7f", alpha);
         LOG(OUTPUT_INFO, "\n\n");
 
         print_matrix(Rho, "Rho matrix");

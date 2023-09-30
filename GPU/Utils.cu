@@ -649,3 +649,15 @@ void normal_update_eta(int n, gsl_matrix * Znon, gsl_matrix *Rho, gsl_matrix *Et
     compute_full_eta(Znon, &rho_n_n.matrix, Etanon);
     gsl_matrix_free(rhocy);
 }
+
+double get_trace(gsl_matrix * m){
+    if(m->size1 != m->size2){
+        LOG(OUTPUT_NORMAL, "error: get trace of none square matrix")
+        return 0;
+    }
+    double res = 0;
+    for(int i = 0; i < m->size1; i++){
+        res += gsl_matrix_get(m, i, i);
+    }
+    return res;
+}
