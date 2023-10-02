@@ -365,7 +365,7 @@ sample_s2Rho(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *vecRho, gsl
 
     printf("D = %f\n", gsl_matrix_get(D, 0, 0));
 
-    double precision = gsl_ran_gamma(seed, a + N * N / 2., b / (1 + b * gsl_matrix_get(D, 0, 0) / 2));//???????
+    double precision = gsl_ran_gamma(seed, a + N * N * 0.5, b / (1 + b * gsl_matrix_get(D, 0, 0) * 0.5));//???????
     gsl_matrix_free(aux);
     gsl_matrix_free(S);
     gsl_matrix_free(D);
@@ -391,10 +391,10 @@ sample_s2Rho_trace(int N, int K, gsl_matrix *A, gsl_matrix *Z, gsl_matrix *Rho, 
 
     printf("Trace D = %f\n", trace);
 
-    double precision = gsl_ran_gamma(seed, a + N / 2., b / (1 + b * trace / 2.));//???????
+    double precision = gsl_ran_gamma(seed, a + N * N * 0.5, 1. / (b + trace * 0.5));//???????
     gsl_matrix_free(aux);
     gsl_matrix_free(D);
-    return precision;
+    return 1. / precision;
 }
 
 
@@ -407,27 +407,27 @@ double sample_s2H(int K, gsl_matrix *vecH, const gsl_rng *seed) {
 
     printf("var H = %f\n", gsl_matrix_get(var, 0, 0));
 
-    double precision = gsl_ran_gamma(seed, a + K * K / 2., b / (1 + b * gsl_matrix_get(var, 0, 0) / 2));
+    double precision = gsl_ran_gamma(seed, a + K * K * 0.5, b / (1 + b * gsl_matrix_get(var, 0, 0) * 0.5));
     gsl_matrix_free(var);
     return 1. / precision;
 }
 
-double sample_s2H_trace(int K, gsl_matrix *H, const gsl_rng *seed) {
-    double a = 2;
-    double b = 1;
+double sample_s2H_trace(int K, gsl_matrix *Z, gsl_matrix *Rho, const gsl_rng *seed) {
+    double c = 2;
+    double d = 1;
 
-    gsl_matrix *aux = gsl_matrix_calloc(K, K);
+    gsl_matrix *aux = gsl_matrix_calloc(K * K, 1);
+    gsl_matrix *res = gsl_matrix_calloc(1, 1);
 
-    gsl_matrix_view H_view = gsl_matrix_submatrix(H, 0, 0, K, K);
+    compute_full_eta(Z, Rho, aux);
+    matrix_multiply(aux, aux, res, 1, 0, CblasTrans, CblasNoTrans);
 
-    matrix_multiply(&H_view.matrix, &H_view.matrix, aux, 1, 0, CblasTrans, CblasNoTrans);
-    double trace = get_trace(aux);
+    double precision = gsl_ran_gamma(seed, c + 0.5 * K * K, 1. / (d + 0.5 * gsl_matrix_get(res, 0, 0)));
 
-    printf("Trace H = %f\n", trace);
-
-    double precision = gsl_ran_gamma(seed, a + K / 2., b / (1 + b * trace / 2.));
     gsl_matrix_free(aux);
-    return precision;
+    gsl_matrix_free(res);
+
+    return 1. / precision;
 }
 
 
@@ -781,11 +781,8 @@ int IBP_sampler_func(double missing,     // how the missing data is defined
         gsl_matrix2vector(vecRho, Rho);
 
         // target H is 0.2, Rho is 0.1
-//        s2Rho = sample_s2Rho(N, Kest, A, Z, vecRho, vecH, seed);
         s2Rho = sample_s2Rho_trace(N, Kest, A, Z, Rho, H, seed);
-
-//        s2H = sample_s2H(Kest, vecH, seed);
-        s2H = sample_s2H_trace(Kest, H, seed);
+        s2H = sample_s2H_trace(Kest, Z, Rho, seed);
 
         alpha = sample_alpha(Kest, N, seed);
 

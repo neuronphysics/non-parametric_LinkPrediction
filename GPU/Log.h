@@ -15,7 +15,7 @@
 
 #define DATASET_NAME "_2000_5_withH"
 
-#define VERSION_DECLARE "Change P to 1/P \n"
+#define VERSION_DECLARE "change s2H formula and s2Rho formula \n"
 
 #define LOG(level, fmt, ...) \
         if(OUTPUT_LEVEL >= level){ \

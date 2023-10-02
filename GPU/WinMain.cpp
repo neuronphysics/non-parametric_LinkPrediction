@@ -48,7 +48,7 @@ int main() {
     // k need to be larger than 1
     int K = 3;
     double zeroPartOfZ = 0.4;
-    double s2Rho = 0.0025;
+    double s2Rho = 0.1;
 
 
 

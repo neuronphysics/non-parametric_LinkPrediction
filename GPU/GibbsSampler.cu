@@ -490,7 +490,7 @@ int accelerated_gibbs(int maxK,              //  max number of latent features
     compute_full_eta(&Z_view.matrix, Rho, &Eta_view.matrix);
 
     //sample every user
-    for (int n = 0; n < 1; n++) {
+    for (int n = 0; n < N; n++) {
         auto *p = new double[TK];
         for (int i = 0; i < TK; i++) {
             p[i] = 0.0;
